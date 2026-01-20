@@ -1,0 +1,32 @@
+{
+  "name": "md-open",
+  "version": "1.0.0",
+  "description": "CLI tool to preview markdown files in browser",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "md-open": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepack": "npm run build",
+    "test": "node --import tsx --test 'src/**/*.test.ts' 'tests/**/*.test.js'",
+    "dev": "npx tsx src/index.ts"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "files": [
+    "dist/",
+    "public/"
+  ],
+  "dependencies": {
+    "marked": "^15.0.0",
+    "open": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}
