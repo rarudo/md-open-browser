@@ -1,11 +1,11 @@
 {
-  "name": "md-open",
+  "name": "md-open-browser",
   "version": "1.0.0",
   "description": "CLI tool to preview markdown files in browser",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "md-open": "dist/index.js"
+    "md-open-browser": "dist/index.js"
   },
   "scripts": {
     "build": "tsc",

@@ -34,7 +34,7 @@ release-pleaseによるバージョン管理、OIDC Trusted Publishingによる�
 
 1.3 The release-please-config.jsonは以下の設定を含むものとする:
   - `release-type`: "node"
-  - `package-name`: "md-open"
+  - `package-name`: "md-open-browser"
   - `changelog-path`: "CHANGELOG.md"
 
 1.4 The .release-please-manifest.jsonは現在のバージョン番号を管理するものとする
@@ -147,7 +147,7 @@ release-pleaseによるバージョン管理、OIDC Trusted Publishingによる�
 6.1 The npmjs.comのパッケージ設定でTrusted Publisherを設定するものとする（手動作業）:
   - Provider: GitHub Actions
   - Owner: rarudo
-  - Repository: md-open
+  - Repository: md-open-browser
   - Workflow: release-please.yml
 
 6.2 The 設定は初回のみ手動で実施し、以降は自動認証されるものとする

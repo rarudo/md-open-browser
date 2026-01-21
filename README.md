@@ -56,3 +56,30 @@ npm test
 - mermaidダイアグラム対応
 - シンタックスハイライト対応
 - ポート競合時の自動解決
+
+## リリースプロセス
+
+このプロジェクトは[release-please](https://github.com/googleapis/release-please)を使用した自動リリースを採用しています。
+
+### Conventional Commits
+
+以下のコミットプレフィックスを使用してください：
+
+- `feat:` - 新機能（マイナーバージョンアップ）
+- `fix:` - バグ修正（パッチバージョンアップ）
+- `feat!:` または `fix!:` - 破壊的変更（メジャーバージョンアップ）
+- `chore:`, `docs:`, `refactor:` - バージョンアップなし
+
+### リリースフロー
+
+1. `main`ブランチにコミットをpush
+2. release-pleaseがリリースPRを作成または更新
+3. リリースPRをマージするとnpm publishが自動実行
+
+### 手動パブリッシュ
+
+緊急時は以下の手順で手動パブリッシュできます：
+
+1. Actions > release-pleaseを開く
+2. "Run workflow"をクリック
+3. mode: "publish"を選択して実行

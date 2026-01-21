@@ -47,6 +47,23 @@ npm run dev -- tests/fixtures/test1.md tests/fixtures/test2.md
 npm test
 ```
 
+## GitHub Actions
+
+### release-please.yml
+
+mainブランチへのpushでリリースPRを自動作成。PRマージ時にnpm publishを実行。
+
+### security-audit.yml
+
+push/PR/週次でnpm auditとlockfile-lintを実行。
+
+### リリース手順
+
+1. `feat:` または `fix:` プレフィックスでコミット
+2. mainブランチにpush
+3. release-pleaseがリリースPRを作成
+4. PRをマージするとnpm publishが自動実行
+
 ## プロジェクト構造
 
 ```
