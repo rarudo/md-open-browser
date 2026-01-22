@@ -68,8 +68,8 @@ async function showFile(filename) {
 
 function fixTaskListNumbering(html) {
   return html.replace(
-    /(<input[^>]*>)\s*<ol[^>]*>\s*<li>([\s\S]*?)<\/li>\s*<\/ol>/g,
-    '$1 $2'
+    /(<p>)?(<input[^>]*>)(\s*<\/p>)?\s*<ol[^>]*>\s*<li>([\s\S]*?)<\/li>\s*<\/ol>/g,
+    '$2 $4'
   );
 }
 

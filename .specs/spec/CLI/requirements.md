@@ -57,6 +57,28 @@ description: md-open CLIツールの要件定義
 
 2.6 The システムは静的ファイル（HTML、CSS、JavaScript）を配信するものとする
 
+2.7 The HTTPサーバーはNode.js標準の`http.createServer`を使用して実装するものとする
+
+2.8 When `GET /api/files`リクエストを受信した場合, the サーバーはファイル情報のJSONを返却するものとする
+  - レスポンス形式: `[{ "name": "filename.md", "path": "/path/to/file.md" }]`
+  - Content-Type: `application/json; charset=utf-8`
+  - ステータスコード: 200
+
+2.9 When `GET /api/files/:filename`リクエストを受信した場合, the サーバーは該当ファイルの内容をプレーンテキストで返却するものとする
+  - Content-Type: `text/plain; charset=utf-8`
+  - ステータスコード: 200
+
+2.10 When 存在しないファイル名でリクエストを受信した場合, the サーバーは404ステータスを返却するものとする
+
+2.11 When `GET /`または`GET /index.html`リクエストを受信した場合, the サーバーはpublic/index.htmlを返却するものとする
+
+2.12 When 静的ファイルリクエストを受信した場合, the サーバーはpublic/配下の該当ファイルを適切なContent-Typeで返却するものとする
+  - .html: `text/html; charset=utf-8`
+  - .css: `text/css; charset=utf-8`
+  - .js: `application/javascript; charset=utf-8`
+
+2.13 The サーバーはserver.close()メソッドで正常に停止できるものとする
+
 ## 3. ファイルリスト表示
 
 **目的**: ユーザーとして、複数のマークダウンファイルを切り替えて閲覧したい。それにより、関連するドキュメントを効率的に確認できる。
@@ -73,14 +95,82 @@ description: md-open CLIツールの要件定義
 
 3.5 The システムはファイル名のみをリストに表示するものとする（フルパスではなく）
 
-## 4. API
+## 4. ランタイムとビルド
 
-**目的**: フロントエンドとして、バックエンドからファイル情報とコンテンツを取得したい。それにより、動的にファイル内容を表示できる。
+**目的**: 開発者として、Node.jsランタイムでmd-openを実行したい。それにより、npxで即座に利用できる。
 
 ### 受け入れ基準
 
-4.1 When `GET /api/files` リクエストが送信された場合, the システムは登録されたファイルのリスト（ファイル名とパス）をJSON形式で返すものとする
+4.1 The システムはNode.js 20以上のランタイムで動作するものとする
 
-4.2 When `GET /api/files/:filename` リクエストが送信された場合, the システムは指定されたファイルのマークダウンコンテンツを返すものとする
+4.2 The エントリーポイント（src/index.ts）はshebang行に`#!/usr/bin/env node`を使用するものとする
 
-4.3 If 存在しないファイルが要求された場合, the システムは404ステータスコードを返すものとする
+4.3 When ユーザーが`npx md-open file.md`を実行した場合, the システムはNode.jsランタイムでCLIを起動するものとする
+
+4.4 The システムはtscを使用してTypeScriptをJavaScriptにトランスパイルするものとする
+  - 出力ディレクトリ: `dist/`
+  - ソースディレクトリ: `src/`
+
+4.5 When `npm run build`を実行した場合, the システムは`dist/`ディレクトリにJavaScriptファイルを生成するものとする
+
+4.6 The package.jsonのbinフィールドは`"md-open": "dist/index.js"`を指定するものとする
+
+4.7 When npxで実行される場合, the システムはビルド済みのJavaScriptファイルを実行するものとする（TypeScriptランタイム不要）
+
+4.8 The dist/index.jsファイルは先頭にshebang行`#!/usr/bin/env node`を含むものとする
+
+## 5. ファイルI/O
+
+**目的**: 開発者として、Node.js標準のfsモジュールでファイル操作を行いたい。それにより、外部依存を最小化できる。
+
+### 受け入れ基準
+
+5.1 The システムはファイル読み取りに`fs.promises.readFile`を使用するものとする
+
+5.2 The システムはファイル存在確認に`fs.promises.stat`またはtry-catchパターンを使用するものとする
+
+5.3 The システムはディレクトリパス取得に`fileURLToPath(import.meta.url)`と`dirname`を使用するものとする
+
+## 6. package.json設定
+
+**目的**: npm管理者として、適切なパッケージ設定でnpm publishしたい。それにより、npxで正しく実行できるようになる。
+
+### 受け入れ基準
+
+6.1 The package.jsonは以下の設定を含むものとする:
+  - `"name": "md-open"`
+  - `"type": "module"`
+  - `"engines": { "node": ">=20.0.0" }`
+  - `"main": "dist/index.js"`
+  - `"bin": { "md-open": "dist/index.js" }`
+
+6.2 The filesフィールドは公開に必要なファイルのみを含むものとする:
+  - `dist/`
+  - `public/`
+
+6.3 The dependenciesは実行時に必要なパッケージのみを含むものとする:
+  - `marked`
+  - `open`
+
+6.4 The devDependenciesは開発時のみ必要なパッケージを含むものとする:
+  - `@types/node`
+  - `tsx`
+  - `typescript`
+
+6.5 The scriptsは以下を含むものとする:
+  - `"build": "tsc"`
+  - `"prepack": "npm run build"`
+  - `"dev": "npx tsx src/index.ts"`
+  - `"test": "node --import tsx --test 'src/**/*.test.ts' 'tests/**/*.test.js'"`
+
+## 7. テスト
+
+**目的**: 開発者として、Node.js標準のテストランナーを使用したい。それにより、外部依存を排除できる。
+
+### 受け入れ基準
+
+7.1 The テストはNode.js標準の`node:test`モジュールを使用するものとする
+
+7.2 The アサーションはNode.js標準の`node:assert`モジュールを使用するものとする
+
+7.3 When `npm test`を実行した場合, the システムは全テストファイルを実行するものとする

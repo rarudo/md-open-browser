@@ -1,12 +1,12 @@
 ---
-description: GitHub Actions npm publish自動化の要件定義
+description: CI/CDパイプラインの要件定義
 ---
-# GitHub Actions npm publish自動化
+# CI/CDパイプライン
 
-GitHub Actionsを使用してnpmパッケージを自動的にパブリッシュする機能を追加する。
-release-pleaseによるバージョン管理、OIDC Trusted Publishingによるセキュアな認証、セキュリティ監査の定期実行を実現する。
+GitHub Actionsを使用してnpmパッケージを自動的にパブリッシュし、セキュリティ監査を実行する機能。
+release-pleaseによるバージョン管理、OIDC Trusted Publishingによるセキュアな認証を実現する。
 
-関連: [design](design.md) | [npm-publish対応](../npm-publish/requirements.md)
+関連: [design](design.md)
 
 ## EARS記法パターン
 
@@ -151,18 +151,3 @@ release-pleaseによるバージョン管理、OIDC Trusted Publishingによる�
   - Workflow: release-please.yml
 
 6.2 The 設定は初回のみ手動で実施し、以降は自動認証されるものとする
-
-## 7. ドキュメント更新
-
-**目的**: 開発者として、リリースプロセスを理解したい。それにより、正しくリリースを実行できる。
-
-### 受け入れ基準
-
-7.1 The README.mdにリリースプロセスのセクションを追加するものとする:
-  - Conventional Commits形式の説明
-  - リリースPRの確認方法
-  - 緊急パブリッシュの手順
-
-7.2 The CLAUDE.mdは開発コマンドセクションを更新するものとする:
-  - GitHub Actionsワークフローの説明
-  - リリースプロセスの概要

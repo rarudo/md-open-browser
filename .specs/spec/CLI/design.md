@@ -14,6 +14,7 @@ description: md-open CLIツールの技術設計
 - シンプルなコマンドで複数のマークダウンファイルをプレビュー
 - ポート競合時の自動解決
 - npxで実行可能
+- 外部依存を最小化する（Node.js標準APIを優先）
 
 ## 非ゴール
 - ファイル監視（ホットリロード）機能
@@ -26,20 +27,32 @@ description: md-open CLIツールの技術設計
 
 ```mermaid
 flowchart TB
-    subgraph CLI["CLI Layer"]
-        Entry[index.ts<br/>エントリーポイント]
+    subgraph Build["ビルドレイヤー"]
+        TSC[tsc コンパイラ]
+        SRC[src/*.ts]
+        DIST[dist/*.js]
+    end
+    subgraph CLI["CLIレイヤー"]
+        Entry[dist/index.js<br/>エントリーポイント]
         ArgParser[引数パーサー]
     end
-    subgraph Server["Server Layer"]
-        HTTPServer[Bun.serve<br/>HTTPサーバー]
+    subgraph Server["サーバーレイヤー"]
+        HTTPServer[http.createServer<br/>HTTPサーバー]
         StaticHandler[静的ファイル配信]
         APIHandler[API Handler]
+    end
+    subgraph IO["I/Oレイヤー"]
+        FS[fs/promises]
+        Path[path/url]
     end
     subgraph Client["Client Layer (Browser)"]
         HTML[index.html]
         CSS[styles.css]
         JS[app.js]
     end
+    SRC --> TSC
+    TSC --> DIST
+    DIST --> Entry
     Entry --> ArgParser
     ArgParser --> HTTPServer
     HTTPServer --> StaticHandler
@@ -47,23 +60,39 @@ flowchart TB
     StaticHandler --> HTML
     StaticHandler --> CSS
     StaticHandler --> JS
+    StaticHandler --> FS
+    Entry --> Path
 ```
 
 **アーキテクチャ統合**:
-- 選択されたパターン: シンプルな3層構造（CLI → Server → Client）
+- 選択されたパターン: シンプルな層構造（Build → CLI → Server → Client）
 - ドメイン/機能境界: CLIは引数解析と起動、Serverはファイル配信とAPI、Clientはレンダリング
-- 新規コンポーネントの根拠: 新規プロジェクトのため全て新規作成
+- 保持される既存パターン: HTTPサーバー、静的ファイル配信、CLIオプション解析
+- 新規コンポーネントの根拠: tscビルドステップの追加、dist/出力ディレクトリ
 
 ### 技術スタック
 
 | レイヤー | 選択/バージョン | 機能における役割 | 備考 |
 |--------|---------------|----------------|-----|
-| Runtime | Bun | CLIとサーバー実行 | 高速、TypeScript直接実行 |
-| CLI | util.parseArgs | 引数解析 | Node.js標準API、Bun互換 |
-| Server | Bun.serve | HTTPサーバー | 静的ファイル配信、API |
-| Test | bun:test | ユニットテスト | Bunネイティブ |
+| ランタイム | Node.js 20+ | 実行環境 | LTSバージョン |
+| ビルド | TypeScript 5.x | TS→JSトランスパイル | tscコンパイラ |
+| CLI | util.parseArgs | 引数解析 | Node.js標準API |
+| HTTPサーバー | http標準モジュール | リクエスト処理 | 外部依存なし |
+| ファイルI/O | fs/promises | 非同期ファイル操作 | 外部依存なし |
+| 開発時TS実行 | tsx | 開発時のTS直接実行 | devDependency |
+| テスト | node:test + node:assert | テスト実行 | 外部依存なし |
 
 ## システムフロー
+
+### ビルドフロー
+
+```mermaid
+flowchart LR
+    A[npm run build] --> B[tsc -p tsconfig.json]
+    B --> C[src/*.ts]
+    C --> D[dist/*.js]
+    D --> E[shebang付きJS]
+```
 
 ### コマンド実行フロー
 
@@ -116,26 +145,58 @@ sequenceDiagram
 | 1.7-1.8 | ファイル検証 | index.ts | validateFiles |
 | 2.1-2.2 | サーバー起動 | server.ts | startServer |
 | 2.3-2.4 | 起動通知 | server.ts | onListen |
+| 2.7-2.13 | HTTPサーバー | server.ts | http.createServer |
 | 3.1-3.5 | ファイルリスト | client/app.js | FileList |
-| 4.1-4.3 | API | server.ts | handleAPI |
+| 4.1-4.8 | ランタイム・ビルド | tsconfig.json, package.json | tsc, npm scripts |
+| 5.1-5.3 | ファイルI/O | server.ts | fs.promises |
+| 6.1-6.5 | package.json | package.json | npm設定 |
+| 7.1-7.3 | テスト | *.test.ts | node:test |
 
 ## コンポーネントとインターフェース
 
-### CLI
+### tsconfig.json
 
-#### index.ts (エントリーポイント)
+| フィールド | 詳細 |
+|----------|------|
+| 意図 | tscビルド設定でESM出力を生成 |
+| 要件 | 4.4, 4.5, 4.8 |
+
+**設定内容**
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "node",
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "skipLibCheck": true,
+    "declaration": false,
+    "sourceMap": false,
+    "esModuleInterop": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "**/*.test.ts"]
+}
+```
+
+### src/index.ts (エントリーポイント)
 
 | フィールド | 詳細 |
 |----------|------|
 | 意図 | CLIのエントリーポイント。引数解析とサーバー起動を担当 |
-| 要件 | 1.1-1.8 |
+| 要件 | 1.1-1.8, 4.2 |
 
 **責任と制約**
 - コマンドライン引数の解析
 - ファイルの存在確認
 - サーバーの起動と終了処理
+- SIGINT処理
 
 **依存関係**
+- インバウンド: ユーザー入力
 - アウトバウンド: server.ts — サーバー起動
 
 **メソッド一覧**
@@ -145,15 +206,15 @@ sequenceDiagram
 | `main()` | メイン処理 | なし | void |
 | `parseOptions(args: string[]): Options` | 引数解析 | args: コマンドライン引数 | Options |
 | `validateFiles(files: string[]): string[]` | ファイル検証 | files: ファイルパス配列 | 有効なファイルパス配列 |
+| `showHelp(): void` | ヘルプ表示 | なし | void |
+| `showVersion(): void` | バージョン表示 | なし | void |
 
-### Server
-
-#### server.ts
+### src/server.ts
 
 | フィールド | 詳細 |
 |----------|------|
 | 意図 | HTTPサーバーの起動と管理、API・静的ファイル配信 |
-| 要件 | 2.1-2.6, 4.1-4.3 |
+| 要件 | 2.1-2.13, 5.1-5.3 |
 
 **責任と制約**
 - HTTPサーバーのライフサイクル管理
@@ -163,15 +224,15 @@ sequenceDiagram
 
 **依存関係**
 - インバウンド: index.ts — サーバー起動要求
-- アウトバウンド: ファイルシステム — ファイル読み取り
+- アウトバウンド: fs/promises — ファイル読み取り
 
 **メソッド一覧**
 
 | メソッドシグネチャ | 概要 | パラメータ | 戻り値 |
 |------------------|------|----------|-------|
 | `startServer(files: string[], options: ServerOptions): Promise<Server>` | サーバー起動 | files: ファイルリスト, options: 設定 | Server |
-| `startServerWithFallback(files: string[], port: number, options: ServerOptions): Promise<Server>` | ポートフォールバック付き起動 | files, port, options | Server |
-| `handleRequest(req: Request, files: string[]): Response` | リクエストハンドリング | req, files | Response |
+| `startServerWithFallback(files: string[], port: number, options: ServerOptions, maxRetries: number): Promise<Server>` | ポートフォールバック付き起動 | files, port, options, maxRetries | Server |
+| `getContentType(filePath: string): string` | Content-Type判定 | filePath: ファイルパス | MIMEタイプ文字列 |
 
 ### クラス構造図
 
@@ -186,12 +247,15 @@ classDiagram
     }
     class ServerOptions {
         +number port
-        +boolean noOpen
     }
-    class Server {
+    class ExtendedServer {
         +string url
         +number port
-        +stop() Promise~void~
+        +stop() void
+    }
+    class FileInfo {
+        +string name
+        +string path
     }
     Options --> ServerOptions : creates
 ```
@@ -203,7 +267,7 @@ classDiagram
 | フィールド | 詳細 |
 |----------|------|
 | 意図 | ファイル情報をAPIで返却するための型 |
-| 要件 | 4.1 |
+| 要件 | 2.8 |
 
 **フィールド定義**
 
@@ -221,44 +285,86 @@ classDiagram
 
 ## ライブラリ使用仕様
 
-### Bun.serve
+### http標準モジュール
 
 | API | シグネチャ | 使用例 | 既存使用箇所 |
 |-----|----------|-------|------------|
-| serve | `Bun.serve(options: ServeOptions): Server` | `Bun.serve({ port: 3000, fetch: handler })` | server.ts |
+| createServer | `createServer(handler): Server` | `http.createServer((req, res) => {})` | src/server.ts |
+| server.listen | `listen(port, callback): void` | `server.listen(3000, () => {})` | src/server.ts |
+| server.close | `close(callback): void` | `server.close(() => {})` | src/server.ts |
+
+### fs/promises
+
+| API | シグネチャ | 使用例 | 既存使用箇所 |
+|-----|----------|-------|------------|
+| readFile | `readFile(path, encoding): Promise<string>` | `await fs.readFile(path, 'utf-8')` | src/server.ts |
+| stat | `stat(path): Promise<Stats>` | `await fs.stat(path)` | src/server.ts |
+
+### url/path
+
+| API | シグネチャ | 使用例 | 既存使用箇所 |
+|-----|----------|-------|------------|
+| fileURLToPath | `fileURLToPath(url): string` | `fileURLToPath(import.meta.url)` | src/server.ts |
+| dirname | `dirname(path): string` | `dirname(__filename)` | src/server.ts |
 
 ### util.parseArgs
 
 | API | シグネチャ | 使用例 | 既存使用箇所 |
 |-----|----------|-------|------------|
-| parseArgs | `parseArgs(config: ParseArgsConfig)` | `parseArgs({ args: Bun.argv.slice(2), options: {...} })` | index.ts |
+| parseArgs | `parseArgs(config: ParseArgsConfig)` | `parseArgs({ args: process.argv.slice(2), options: {...} })` | index.ts |
 
 ## コーディングパターン
 
+### ディレクトリパス取得パターン（ESM）
+```typescript
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+const __filename = import.meta.url ? fileURLToPath(import.meta.url) : "";
+const __dirname = __filename ? path.dirname(__filename) : process.cwd() + "/src";
+```
+
+**注意**: pathモジュールはdestructuring（`import { dirname } from 'path'`）ではなく、default import（`import path from 'path'`）を使用すること。`node --import tsx`環境でdestructuringを使用すると、関数が`undefined`になる問題がある。
+
+### HTTPレスポンスパターン
+```typescript
+// JSON応答
+res.statusCode = 200;
+res.setHeader('Content-Type', 'application/json; charset=utf-8');
+res.end(JSON.stringify(data));
+
+// ファイル応答
+res.statusCode = 200;
+res.setHeader('Content-Type', getContentType(filePath));
+res.end(content);
+
+// エラー応答
+res.statusCode = 404;
+res.end('Not Found');
+```
+
 ### ポートフォールバックパターン
 ```typescript
-async function startServerWithFallback(
-  files: string[],
-  port: number,
-  options: ServerOptions
-): Promise<Server> {
-  try {
-    return await startServer(files, { ...options, port });
-  } catch (error) {
-    if (error.code === "EADDRINUSE") {
-      console.log(`Port ${port} is busy, trying ${port + 1}...`);
-      return startServerWithFallback(files, port + 1, options);
-    }
+const server = http.createServer(handler);
+
+server.on('error', (error: NodeJS.ErrnoException) => {
+  if (error.code === 'EADDRINUSE' && retries > 0) {
+    console.log(`Port ${port} is busy, trying ${port + 1}...`);
+    startServerWithFallback(files, port + 1, options, retries - 1);
+  } else {
     throw error;
   }
-}
+});
+
+server.listen(port);
 ```
 
 ### 静的ファイル配信パターン
 ```typescript
 function serveStatic(path: string): Response {
-  const file = Bun.file(`./public${path}`);
-  return new Response(file);
+  const staticPath = path.resolve(__dirname, "../public", pathname.slice(1));
+  const content = await fs.readFile(staticPath);
+  return content;
 }
 ```
 
@@ -268,7 +374,7 @@ function serveStatic(path: string): Response {
 
 | 対象 | テスト種類 | 理由 |
 |-----|----------|-----|
-| parseOptions | ユニットテスト | 純粋な関数のため |
+| parseOptions | ユニットテスト | 純粋な引数解析関数のため |
 | validateFiles | ユニットテスト | ファイルシステムモック可能 |
 | startServer | 統合テスト | サーバー起動の実際の動作確認 |
 | API endpoints | 統合テスト | HTTPリクエスト/レスポンスの確認 |
@@ -293,3 +399,9 @@ function serveStatic(path: string): Response {
 |--------|-------|---------|-------|
 | セキュリティ | ファイルパス検証 | 任意ファイルアクセス防止 | 許可されたファイルのみ配信 |
 | パフォーマンス | 大きなMDファイル | メモリ使用量増加 | ファイルサイズ警告 |
+| 互換性 | ESMの維持 | type: "module"を維持する | package.json確認 |
+| パス解決 | import.meta.dir | Node.jsにはないBun拡張 | fileURLToPath使用 |
+| Content-Type | 拡張子判定 | 手動でContent-Type判定が必要 | getContentType関数実装 |
+| pathモジュール | destructuring不可 | `node --import tsx`環境でdestructuringすると関数がundefinedになる | default importで`import path from 'path'`を使用 |
+| shebang | ビルド後の保持 | tscはshebangを保持する | src/index.tsの先頭にshebang記述 |
+| テスト除外 | ビルド対象外 | テストファイルはdistに含めない | tsconfig.jsonのexclude設定 |
