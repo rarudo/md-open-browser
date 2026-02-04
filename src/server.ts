@@ -40,7 +40,7 @@ async function startServerWithFallback(
   files: string[],
   port: number,
   options: ServerOptions,
-  maxRetries = 10
+  maxRetries = 100
 ): Promise<ExtendedServer> {
   return new Promise((resolve, reject) => {
     const server = http.createServer(async (req: http.IncomingMessage, res: http.ServerResponse) => {
@@ -106,7 +106,11 @@ async function startServerWithFallback(
           .then(resolve)
           .catch(reject);
       } else {
-        reject(error);
+        if (error.code === "EADDRINUSE") {
+          reject(new Error(`ポート ${options.port}〜${port} はすべて使用中です。他のアプリケーションを終了してから再試行してください。`));
+        } else {
+          reject(error);
+        }
       }
     });
 
