@@ -66,3 +66,56 @@ test("ポートフォールバック", async (t) => {
     unlinkSync(testFile2);
   });
 });
+
+test("tmux API", async (t) => {
+  const testFileTmux = "test-tmux.md";
+  let serverWithTmux: ExtendedServer;
+  let serverWithoutTmux: ExtendedServer;
+
+  t.before(async () => {
+    writeFileSync(testFileTmux, "# Tmux Test");
+    serverWithTmux = await startServer([testFileTmux], {
+      port: 3300,
+      tmuxPane: "%0",
+    });
+    serverWithoutTmux = await startServer([testFileTmux], {
+      port: 3400,
+    });
+  });
+
+  t.after(() => {
+    serverWithTmux.close();
+    serverWithoutTmux.close();
+    unlinkSync(testFileTmux);
+  });
+
+  await t.test("GET /api/tmux/status - tmux有効時", async () => {
+    const res = await fetch(`${serverWithTmux.url}api/tmux/status`);
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.strictEqual(data.enabled, true);
+    assert.strictEqual(data.paneId, "%0");
+  });
+
+  await t.test("GET /api/tmux/status - tmux無効時", async () => {
+    const res = await fetch(`${serverWithoutTmux.url}api/tmux/status`);
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.strictEqual(data.enabled, false);
+    assert.strictEqual(data.paneId, null);
+  });
+
+  await t.test("GET /api/tmux/pane - tmux無効時は404", async () => {
+    const res = await fetch(`${serverWithoutTmux.url}api/tmux/pane`);
+    assert.strictEqual(res.status, 404);
+  });
+
+  await t.test("POST /api/tmux/send - tmux無効時は404", async () => {
+    const res = await fetch(`${serverWithoutTmux.url}api/tmux/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: "hello" }),
+    });
+    assert.strictEqual(res.status, 404);
+  });
+});

@@ -10,6 +10,7 @@ interface Options {
   noOpen: boolean;
   help: boolean;
   version: boolean;
+  tmuxPane: string | undefined;
 }
 
 function parseOptions(args: string[]): Options {
@@ -20,6 +21,7 @@ function parseOptions(args: string[]): Options {
       version: { type: "boolean", short: "v", default: false },
       port: { type: "string", short: "p", default: "3000" },
       "no-open": { type: "boolean", default: false },
+      "tmux-pane": { type: "string" },
     },
     allowPositionals: true,
   });
@@ -30,6 +32,7 @@ function parseOptions(args: string[]): Options {
     noOpen: values["no-open"] as boolean,
     help: values.help as boolean,
     version: values.version as boolean,
+    tmuxPane: values["tmux-pane"] as string | undefined,
   };
 }
 
@@ -57,6 +60,7 @@ Options:
   -v, --version        Show version
   -p, --port <number>  Port number (default: 3000)
   --no-open            Don't open browser automatically
+  --tmux-pane <id>     Enable tmux catchup UI with specified pane
 
 Examples:
   md-open file1.md file2.md
@@ -95,6 +99,7 @@ async function main() {
 
   const server = await startServer(validFiles, {
     port: options.port,
+    tmuxPane: options.tmuxPane,
   });
 
   console.log(`Server running at ${server.url}`);

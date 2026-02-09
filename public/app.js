@@ -33,6 +33,8 @@ async function init() {
   if (files.length > 0) {
     await showFile(files[0].name);
   }
+
+  await initTmuxCatchup();
 }
 
 async function fetchFiles() {
@@ -88,4 +90,98 @@ async function renderMarkdown(markdown) {
   preview.innerHTML = html;
 
   await mermaid.run({ querySelector: '.mermaid' });
+}
+
+let tmuxPollingInterval = null;
+let tmuxEnabled = false;
+
+async function initTmuxCatchup() {
+  try {
+    const res = await fetch('/api/tmux/status');
+    const status = await res.json();
+    tmuxEnabled = status.enabled;
+    if (!tmuxEnabled) return;
+
+    document.getElementById('tmux-panel').style.display = 'flex';
+    setupTmuxEventListeners();
+    startTmuxPolling();
+  } catch (e) {
+    console.error('Failed to initialize tmux catchup:', e);
+  }
+}
+
+function setupTmuxEventListeners() {
+  const header = document.querySelector('.tmux-panel-header');
+  const body = document.querySelector('.tmux-panel-body');
+  const toggleBtn = document.getElementById('tmux-panel-toggle');
+
+  header.addEventListener('click', () => {
+    const isCollapsed = body.classList.toggle('collapsed');
+    toggleBtn.innerHTML = isCollapsed ? '&#9650;' : '&#9660;';
+    if (isCollapsed) {
+      stopTmuxPolling();
+    } else {
+      startTmuxPolling();
+    }
+  });
+
+  document.getElementById('tmux-send').addEventListener('click', () => sendTmuxMessage());
+
+  document.getElementById('tmux-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      sendTmuxMessage();
+    }
+  });
+}
+
+async function sendTmuxMessage() {
+  const input = document.getElementById('tmux-input');
+  const sendBtn = document.getElementById('tmux-send');
+  const text = input.value.trim();
+  if (!text) return;
+
+  sendBtn.disabled = true;
+  input.disabled = true;
+
+  try {
+    await fetch('/api/tmux/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    input.value = '';
+    await fetchTmuxPaneContent();
+  } catch (e) {
+    console.error('Failed to send message:', e);
+  } finally {
+    sendBtn.disabled = false;
+    input.disabled = false;
+    input.focus();
+  }
+}
+
+async function fetchTmuxPaneContent() {
+  try {
+    const res = await fetch('/api/tmux/pane');
+    const content = await res.text();
+    const output = document.getElementById('tmux-output');
+    output.textContent = content.replace(/\s+$/, '');
+    output.scrollTop = output.scrollHeight;
+  } catch (e) {
+    console.error('Failed to fetch tmux pane content:', e);
+  }
+}
+
+function startTmuxPolling() {
+  if (tmuxPollingInterval) return;
+  fetchTmuxPaneContent();
+  tmuxPollingInterval = setInterval(fetchTmuxPaneContent, 2000);
+}
+
+function stopTmuxPolling() {
+  if (tmuxPollingInterval) {
+    clearInterval(tmuxPollingInterval);
+    tmuxPollingInterval = null;
+  }
 }

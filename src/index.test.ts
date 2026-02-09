@@ -10,6 +10,7 @@ function parseOptions(args: string[]) {
       version: { type: "boolean", short: "v", default: false },
       port: { type: "string", short: "p", default: "3000" },
       "no-open": { type: "boolean", default: false },
+      "tmux-pane": { type: "string" },
     },
     allowPositionals: true,
   });
@@ -20,6 +21,7 @@ function parseOptions(args: string[]) {
     noOpen: values["no-open"] as boolean,
     help: values.help as boolean,
     version: values.version as boolean,
+    tmuxPane: values["tmux-pane"] as string | undefined,
   };
 }
 
@@ -79,5 +81,16 @@ test("parseOptions", async (t) => {
     assert.strictEqual(result.port, 4000);
     assert.strictEqual(result.noOpen, true);
     assert.deepStrictEqual(result.files, ["test.md"]);
+  });
+
+  await t.test("--tmux-paneオプション", () => {
+    const result = parseOptions(["--tmux-pane", "%5", "test.md"]);
+    assert.strictEqual(result.tmuxPane, "%5");
+    assert.deepStrictEqual(result.files, ["test.md"]);
+  });
+
+  await t.test("--tmux-pane未指定の場合undefined", () => {
+    const result = parseOptions(["test.md"]);
+    assert.strictEqual(result.tmuxPane, undefined);
   });
 });

@@ -1,5 +1,6 @@
 import http from "http";
 import { promises as fs } from "fs";
+import { execSync } from "child_process";
 import { fileURLToPath } from "url";
 import path from "path";
 
@@ -8,6 +9,7 @@ const __dirname = __filename ? path.dirname(__filename) : process.cwd() + "/src"
 
 export interface ServerOptions {
   port: number;
+  tmuxPane?: string;
 }
 
 interface FileInfo {
@@ -27,6 +29,44 @@ function getContentType(filePath: string): string {
   if (filePath.endsWith(".json")) return "application/json; charset=utf-8";
   if (filePath.endsWith(".md")) return "text/plain; charset=utf-8";
   return "application/octet-stream";
+}
+
+function sanitizeTmuxInput(text: string): string {
+  return text.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "");
+}
+
+function tmuxCapturePaneContent(paneId: string): string {
+  try {
+    return execSync(
+      `tmux capture-pane -t ${JSON.stringify(paneId)} -p -S -100`,
+      { encoding: "utf-8", timeout: 5000 }
+    );
+  } catch {
+    return "[Error: Failed to capture tmux pane content]";
+  }
+}
+
+function tmuxSendKeys(paneId: string, text: string): void {
+  const sanitized = sanitizeTmuxInput(text);
+  const pane = JSON.stringify(paneId);
+  execSync(
+    `tmux send-keys -t ${pane} ${JSON.stringify(sanitized)} Enter && sleep 0.1 && tmux send-keys -t ${pane} Enter`,
+    { timeout: 5000 }
+  );
+}
+
+function parseTmuxRequestBody(req: http.IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    req.on("data", (chunk: Buffer) => {
+      body += chunk.toString();
+      if (body.length > 10240) {
+        reject(new Error("Request body too large"));
+      }
+    });
+    req.on("end", () => resolve(body));
+    req.on("error", reject);
+  });
 }
 
 export async function startServer(
@@ -71,6 +111,54 @@ async function startServerWithFallback(
           res.statusCode = 200;
           res.setHeader("Content-Type", "text/plain; charset=utf-8");
           res.end(content);
+          return;
+        }
+
+        if (pathname === "/api/tmux/status") {
+          res.statusCode = 200;
+          res.setHeader("Content-Type", "application/json; charset=utf-8");
+          res.end(JSON.stringify({
+            enabled: !!options.tmuxPane,
+            paneId: options.tmuxPane || null,
+          }));
+          return;
+        }
+
+        if (pathname === "/api/tmux/pane" && req.method === "GET") {
+          if (!options.tmuxPane) {
+            res.statusCode = 404;
+            res.end("tmux integration not enabled");
+            return;
+          }
+          const content = tmuxCapturePaneContent(options.tmuxPane);
+          res.statusCode = 200;
+          res.setHeader("Content-Type", "text/plain; charset=utf-8");
+          res.end(content);
+          return;
+        }
+
+        if (pathname === "/api/tmux/send" && req.method === "POST") {
+          if (!options.tmuxPane) {
+            res.statusCode = 404;
+            res.end("tmux integration not enabled");
+            return;
+          }
+          try {
+            const body = await parseTmuxRequestBody(req);
+            const { text } = JSON.parse(body);
+            if (!text || typeof text !== "string") {
+              res.statusCode = 400;
+              res.end("Invalid request: text field required");
+              return;
+            }
+            tmuxSendKeys(options.tmuxPane, text);
+            res.statusCode = 200;
+            res.setHeader("Content-Type", "application/json; charset=utf-8");
+            res.end(JSON.stringify({ success: true }));
+          } catch {
+            res.statusCode = 500;
+            res.end("Failed to send to tmux pane");
+          }
           return;
         }
 
