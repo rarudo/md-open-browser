@@ -11,6 +11,7 @@ function parseOptions(args: string[]) {
       port: { type: "string", short: "p", default: "3000" },
       "no-open": { type: "boolean", default: false },
       "tmux-pane": { type: "string" },
+      "use-claude-code": { type: "boolean", default: false },
     },
     allowPositionals: true,
   });
@@ -22,6 +23,7 @@ function parseOptions(args: string[]) {
     help: values.help as boolean,
     version: values.version as boolean,
     tmuxPane: values["tmux-pane"] as string | undefined,
+    useClaudeCode: values["use-claude-code"] as boolean,
   };
 }
 
@@ -92,5 +94,16 @@ test("parseOptions", async (t) => {
   await t.test("--tmux-pane未指定の場合undefined", () => {
     const result = parseOptions(["test.md"]);
     assert.strictEqual(result.tmuxPane, undefined);
+  });
+
+  await t.test("--use-claude-codeオプション", () => {
+    const result = parseOptions(["--use-claude-code", "test.md"]);
+    assert.strictEqual(result.useClaudeCode, true);
+    assert.deepStrictEqual(result.files, ["test.md"]);
+  });
+
+  await t.test("--use-claude-code未指定の場合false", () => {
+    const result = parseOptions(["test.md"]);
+    assert.strictEqual(result.useClaudeCode, false);
   });
 });

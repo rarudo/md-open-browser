@@ -110,6 +110,14 @@ async function initTmuxCatchup() {
   }
 }
 
+function autoResizeTextarea(textarea) {
+  textarea.style.height = 'auto';
+  const lineHeight = parseInt(getComputedStyle(textarea).lineHeight);
+  const maxHeight = lineHeight * 4;
+  textarea.style.height = Math.min(textarea.scrollHeight, maxHeight) + 'px';
+  textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+}
+
 function setupTmuxEventListeners() {
   const header = document.querySelector('.tmux-panel-header');
   const body = document.querySelector('.tmux-panel-body');
@@ -133,6 +141,10 @@ function setupTmuxEventListeners() {
       sendTmuxMessage();
     }
   });
+
+  document.getElementById('tmux-input').addEventListener('input', (e) => {
+    autoResizeTextarea(e.target);
+  });
 }
 
 async function sendTmuxMessage() {
@@ -151,6 +163,8 @@ async function sendTmuxMessage() {
       body: JSON.stringify({ text }),
     });
     input.value = '';
+    input.style.height = 'auto';
+    input.style.overflowY = 'hidden';
     await fetchTmuxPaneContent();
   } catch (e) {
     console.error('Failed to send message:', e);

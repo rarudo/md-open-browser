@@ -11,6 +11,7 @@ interface Options {
   help: boolean;
   version: boolean;
   tmuxPane: string | undefined;
+  useClaudeCode: boolean;
 }
 
 function parseOptions(args: string[]): Options {
@@ -22,6 +23,7 @@ function parseOptions(args: string[]): Options {
       port: { type: "string", short: "p", default: "3000" },
       "no-open": { type: "boolean", default: false },
       "tmux-pane": { type: "string" },
+      "use-claude-code": { type: "boolean", default: false },
     },
     allowPositionals: true,
   });
@@ -33,6 +35,7 @@ function parseOptions(args: string[]): Options {
     help: values.help as boolean,
     version: values.version as boolean,
     tmuxPane: values["tmux-pane"] as string | undefined,
+    useClaudeCode: values["use-claude-code"] as boolean,
   };
 }
 
@@ -61,6 +64,7 @@ Options:
   -p, --port <number>  Port number (default: 3000)
   --no-open            Don't open browser automatically
   --tmux-pane <id>     Enable tmux catchup UI with specified pane
+  --use-claude-code    Auto-detect tmux pane from TMUX_PANE env var
 
 Examples:
   md-open file1.md file2.md
@@ -97,9 +101,19 @@ async function main() {
     process.exit(1);
   }
 
+  let tmuxPane = options.tmuxPane;
+  if (!tmuxPane && options.useClaudeCode) {
+    const envPane = process.env.TMUX_PANE;
+    if (envPane) {
+      tmuxPane = envPane;
+    } else {
+      console.warn("Warning: TMUX_PANE environment variable is not set. Catchup UI disabled.");
+    }
+  }
+
   const server = await startServer(validFiles, {
     port: options.port,
-    tmuxPane: options.tmuxPane,
+    tmuxPane,
   });
 
   console.log(`Server running at ${server.url}`);

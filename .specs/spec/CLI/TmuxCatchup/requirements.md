@@ -3,7 +3,7 @@ description: tmuxキャッチアップUIの要件定義
 ---
 # tmuxキャッチアップUI
 
-ブラウザ上のマークダウンプレビューから、tmux上で動作しているClaude Codeに質問を送信し、その応答を確認するための機能。Claude Codeがtmux環境で起動され、--tmux-paneオプションでペイン情報が渡された場合にのみ有効化される。
+ブラウザ上のマークダウンプレビューから、tmux上で動作しているClaude Codeに質問を送信し、その応答を確認するための機能。Claude Codeがtmux環境で起動され、--tmux-paneオプションまたは--use-claude-codeオプションでペイン情報が渡された場合にのみ有効化される。
 
 関連: [design](design.md)
 
@@ -29,7 +29,13 @@ description: tmuxキャッチアップUIの要件定義
 
 1.3 The システムは `--tmux-pane` オプションで受け取ったペインIDを `ServerOptions.tmuxPane` プロパティとして `startServer` 関数に渡すものとする
 
-1.4 When `--help` オプションが指定された場合, the ヘルプメッセージに `--tmux-pane <pane_id>` オプションの説明を含むものとする
+1.4 When `--help` オプションが指定された場合, the ヘルプメッセージに `--tmux-pane <pane_id>` および `--use-claude-code` オプションの説明を含むものとする
+
+1.5 Where `--use-claude-code` オプションが指定された場合, the システムは環境変数 `TMUX_PANE` からペインIDを取得し、`--tmux-pane` と同等にキャッチアップ機能を有効化するものとする
+
+1.6 If `--use-claude-code` オプションが指定されたが環境変数 `TMUX_PANE` が未設定の場合, the システムは警告メッセージ `Warning: TMUX_PANE environment variable is not set. Catchup UI disabled.` を出力し、キャッチアップ機能を無効のまま起動するものとする
+
+1.7 If `--tmux-pane` と `--use-claude-code` の両方が指定された場合, the システムは `--tmux-pane` の値を優先するものとする
 
 ## 2. tmux APIエンドポイント
 
@@ -78,11 +84,17 @@ description: tmuxキャッチアップUIの要件定義
 
 3.3 The キャッチアップパネルはヘッダー下部にペイン出力表示領域（`<pre>`要素）を持つものとする
 
-3.4 The キャッチアップパネルは最下部にテキスト入力フィールドとSendボタンを持つものとする
+3.4 The キャッチアップパネルは最下部に複数行テキスト入力フィールド（`<textarea>`）とSendボタンを持つものとする
 
-3.5 When Sendボタンがクリックされた場合、またはテキスト入力フィールドでEnterキーが押された場合（IME変換中を除く）, the システムは入力テキストを `POST /api/tmux/send` で送信し、入力フィールドをクリアするものとする
+3.5 When Sendボタンがクリックされた場合、またはテキスト入力フィールドでEnterキーが押された場合（IME変換中およびShift+Enter押下時を除く）, the システムは入力テキストを `POST /api/tmux/send` で送信し、入力フィールドをクリアするものとする
 
 3.15 While IMEで変換中（`isComposing === true`）の間, the システムはEnterキーによるテキスト送信を行わないものとする（変換確定の誤送信防止）
+
+3.16 When テキスト入力フィールドでShift+Enterが押された場合, the システムは送信せず改行を挿入するものとする
+
+3.17 The テキスト入力フィールドはデフォルト高さ1行で表示し、入力内容に応じて最大4行まで自動拡張するものとする
+
+3.18 When テキスト入力フィールドの内容がクリアされた場合, the フィールドの高さはデフォルト（1行）にリセットされるものとする
 
 3.6 When キャッチアップパネルが展開状態の場合, the システムは2秒間隔で `GET /api/tmux/pane` をポーリングし、ペイン出力表示領域を更新するものとする
 
@@ -115,3 +127,37 @@ description: tmuxキャッチアップUIの要件定義
 4.3 When tmux連携が無効でキャッチアップパネルが非表示の場合, the マークダウンプレビューのレイアウトは既存の表示と同一であるものとする
 
 4.4 The キャッチアップパネルのスタイルは既存のダークテーマ配色（背景: `#161b22`、ヘッダー: `#21262d`、テキスト: `#e6edf3`、ボーダー: `#30363d`）に統一するものとする
+
+4.5 While tmuxポーリングによりペイン出力表示領域の内容が更新された場合, the マークダウンプレビュー領域（`.markdown-body`）のスクロール位置は変化しないものとする
+
+4.6 The キャッチアップパネルのペイン出力表示領域（`.tmux-output`）は固定高さを使用し、内容量の変化によってパネル全体のサイズが変動しないものとする
+
+## 5. Webターミナルエミュレーション（ttyd統合）
+
+**目的**: ユーザーとして、ブラウザ上でtmuxペインの完全なターミナル表示（ANSIカラー、カーソル移動、入力操作）を行いたい。それにより、マークダウンプレビューを見ながらターミナルと同等の操作体験が得られる。
+
+### 受け入れ基準
+
+5.1 Where `--tmux-pane` または `--use-claude-code` オプションが有効な場合, the システムは ttyd を子プロセスとして起動し、指定されたtmuxペインが属するセッションにアタッチするものとする
+
+5.2 The システムはttydの起動ポートをmd-open-browserのポート+1とするものとする
+
+5.3 If ttydコマンドがPATH上に存在しない場合, the システムは警告メッセージ `Warning: ttyd not found. Falling back to text-based catchup UI.` を出力し、既存のプレーンテキスト方式にフォールバックするものとする
+
+5.4 When md-open-browserプロセスが終了（SIGINT等）した場合, the システムはttyd子プロセスも終了させるものとする
+
+5.5 The `GET /api/tmux/status` レスポンスに `ttydUrl` フィールド（string | null）を追加し、ttydが有効な場合はttydのURL（例: `http://localhost:3001`）を返却するものとする
+
+5.6 Where ttydが有効な場合, the キャッチアップパネルの出力表示領域と入力フィールドをiframeに置き換え、ttydのWebUIを表示するものとする
+
+5.7 The ttyd iframeは既存のキャッチアップパネルのレイアウト内に収まり、パネルの折りたたみ・展開操作はiframeに対しても正常に機能するものとする
+
+5.8 Where ttydが有効な場合, the システムは `/api/tmux/pane`（GET）と `/api/tmux/send`（POST）のポーリング・送信処理を行わないものとする（ttydが双方向通信を直接提供するため）
+
+5.9 If ttyd子プロセスが異常終了した場合, the システムはコンソールにエラーメッセージを出力するものとする
+
+5.10 The ttydはreadonlyモード（`-R`）を使用せず、ユーザーがブラウザ上から直接ターミナルに入力できるようにするものとする
+
+5.11 The ttyd起動時にtmuxペインIDから所属セッションを `tmux display-message -p -t <paneId> "#{session_name}"` で取得し、`tmux attach-session -t <session>` を実行するものとする
+
+5.12 If ttydの起動ポートが使用中の場合, the システムはポートをインクリメントして再試行するものとする（最大10回）
