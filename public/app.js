@@ -103,6 +103,23 @@ async function initTmuxCatchup() {
     if (!tmuxEnabled) return;
 
     document.getElementById('tmux-panel').style.display = 'flex';
+
+    if (status.ttydUrl) {
+      const panelBody = document.querySelector('.tmux-panel-body');
+      const output = document.getElementById('tmux-output');
+      const inputArea = document.querySelector('.tmux-input-area');
+      if (output) output.style.display = 'none';
+      if (inputArea) inputArea.style.display = 'none';
+
+      const iframe = document.createElement('iframe');
+      iframe.src = status.ttydUrl;
+      iframe.className = 'ttyd-frame';
+      panelBody.insertBefore(iframe, panelBody.firstChild);
+
+      setupTtydToggle();
+      return;
+    }
+
     setupTmuxEventListeners();
     startTmuxPolling();
   } catch (e) {
@@ -201,4 +218,15 @@ function stopTmuxPolling() {
     clearInterval(tmuxPollingInterval);
     tmuxPollingInterval = null;
   }
+}
+
+function setupTtydToggle() {
+  const header = document.querySelector('.tmux-panel-header');
+  const body = document.querySelector('.tmux-panel-body');
+  const toggleBtn = document.getElementById('tmux-panel-toggle');
+
+  header.addEventListener('click', () => {
+    const isCollapsed = body.classList.toggle('collapsed');
+    toggleBtn.innerHTML = isCollapsed ? '&#9650;' : '&#9660;';
+  });
 }

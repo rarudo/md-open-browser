@@ -1,8 +1,9 @@
 import http from "http";
 import { promises as fs } from "fs";
-import { execSync } from "child_process";
+import { execSync, spawn, ChildProcess } from "child_process";
 import { fileURLToPath } from "url";
 import path from "path";
+import net from "net";
 
 const __filename = import.meta.url ? fileURLToPath(import.meta.url) : "";
 const __dirname = __filename ? path.dirname(__filename) : process.cwd() + "/src";
@@ -10,6 +11,8 @@ const __dirname = __filename ? path.dirname(__filename) : process.cwd() + "/src"
 export interface ServerOptions {
   port: number;
   tmuxPane?: string;
+  ttydPort?: number;
+  ttydProcess?: ChildProcess;
 }
 
 interface FileInfo {
@@ -69,10 +72,84 @@ function parseTmuxRequestBody(req: http.IncomingMessage): Promise<string> {
   });
 }
 
+function isTtydAvailable(): boolean {
+  try {
+    execSync("which ttyd", { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getTmuxSessionName(paneId: string): string {
+  return execSync(
+    `tmux display-message -p -t ${JSON.stringify(paneId)} "#{session_name}"`,
+    { encoding: "utf-8", timeout: 5000 }
+  ).trim();
+}
+
+function isPortAvailable(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once("error", () => resolve(false));
+    server.once("listening", () => {
+      server.close(() => resolve(true));
+    });
+    server.listen(port);
+  });
+}
+
+async function startTtyd(
+  sessionName: string,
+  basePort: number,
+  maxRetries: number = 10
+): Promise<{ process: ChildProcess; port: number } | null> {
+  let port = basePort;
+  for (let i = 0; i < maxRetries; i++) {
+    const available = await isPortAvailable(port);
+    if (available) {
+      const ttydProcess = spawn("ttyd", [
+        "--port", String(port),
+        "--writable",
+        "tmux", "attach-session", "-t", sessionName,
+      ], {
+        stdio: ["ignore", "pipe", "pipe"],
+        detached: false,
+      });
+
+      ttydProcess.on("exit", (code) => {
+        if (code !== 0 && code !== null) {
+          console.error(`ttyd exited with code ${code}`);
+        }
+      });
+
+      return { process: ttydProcess, port };
+    }
+    port++;
+  }
+  console.error(`Failed to start ttyd: ports ${basePort}-${basePort + maxRetries - 1} are all in use`);
+  return null;
+}
+
 export async function startServer(
   files: string[],
   options: ServerOptions
 ): Promise<ExtendedServer> {
+  if (options.tmuxPane && isTtydAvailable()) {
+    try {
+      const sessionName = getTmuxSessionName(options.tmuxPane);
+      const ttydBasePort = options.port + 1;
+      const result = await startTtyd(sessionName, ttydBasePort);
+      if (result) {
+        options.ttydPort = result.port;
+        options.ttydProcess = result.process;
+      }
+    } catch (e) {
+      console.error("Failed to start ttyd:", e);
+    }
+  } else if (options.tmuxPane) {
+    console.warn("Warning: ttyd not found. Falling back to text-based catchup UI.");
+  }
   return startServerWithFallback(files, options.port, options);
 }
 
@@ -120,6 +197,7 @@ async function startServerWithFallback(
           res.end(JSON.stringify({
             enabled: !!options.tmuxPane,
             paneId: options.tmuxPane || null,
+            ttydUrl: options.ttydPort ? `http://localhost:${options.ttydPort}` : null,
           }));
           return;
         }
@@ -205,7 +283,12 @@ async function startServerWithFallback(
     server.listen(port, () => {
       const extendedServer = server as ExtendedServer;
       extendedServer.url = `http://localhost:${port}/`;
-      extendedServer.stop = () => server.close();
+      extendedServer.stop = () => {
+        if (options.ttydProcess) {
+          options.ttydProcess.kill();
+        }
+        server.close();
+      };
       resolve(extendedServer);
     });
   });

@@ -229,3 +229,11 @@ body::-webkit-scrollbar-thumb {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+.ttyd-frame {
+  flex: 1;
+  width: 100%;
+  min-height: 300px;
+  border: none;
+  background: #0d1117;
+}
