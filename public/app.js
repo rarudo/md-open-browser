@@ -180,8 +180,11 @@ async function fetchTmuxPaneContent() {
     const res = await fetch('/api/tmux/pane');
     const content = await res.text();
     const output = document.getElementById('tmux-output');
+    const wasAtBottom = output.scrollHeight - output.scrollTop - output.clientHeight < 30;
     output.textContent = content.replace(/\s+$/, '');
-    output.scrollTop = output.scrollHeight;
+    if (wasAtBottom) {
+      output.scrollTop = output.scrollHeight;
+    }
   } catch (e) {
     console.error('Failed to fetch tmux pane content:', e);
   }
