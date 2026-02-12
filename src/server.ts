@@ -123,6 +123,12 @@ async function startTtyd(
         }
       });
 
+      ttydProcess.stderr?.on("data", (data: Buffer) => {
+        console.error(`ttyd stderr: ${data.toString()}`);
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
       return { process: ttydProcess, port };
     }
     port++;
@@ -159,6 +165,9 @@ async function startServerWithFallback(
   options: ServerOptions,
   maxRetries = 100
 ): Promise<ExtendedServer> {
+  if (options.ttydPort && port === options.ttydPort) {
+    return startServerWithFallback(files, port + 1, options, maxRetries);
+  }
   return new Promise((resolve, reject) => {
     const server = http.createServer(async (req: http.IncomingMessage, res: http.ServerResponse) => {
       const url = new URL(req.url || "", `http://${req.headers.host}`);
@@ -267,8 +276,12 @@ async function startServerWithFallback(
 
     server.on("error", (error: NodeJS.ErrnoException) => {
       if (error.code === "EADDRINUSE" && maxRetries > 0) {
-        console.log(`Port ${port} is busy, trying ${port + 1}...`);
-        startServerWithFallback(files, port + 1, options, maxRetries - 1)
+        let nextPort = port + 1;
+        if (options.ttydPort && nextPort === options.ttydPort) {
+          nextPort++;
+        }
+        console.log(`Port ${port} is busy, trying ${nextPort}...`);
+        startServerWithFallback(files, nextPort, options, maxRetries - 1)
           .then(resolve)
           .catch(reject);
       } else {

@@ -161,3 +161,9 @@ description: tmuxキャッチアップUIの要件定義
 5.11 The ttyd起動時にtmuxペインIDから所属セッションを `tmux display-message -p -t <paneId> "#{session_name}"` で取得し、`tmux attach-session -t <session>` を実行するものとする
 
 5.12 If ttydの起動ポートが使用中の場合, the システムはポートをインクリメントして再試行するものとする（最大10回）
+
+5.13 When ttydを子プロセスとして起動した場合, the システムはttydがポートへのバインドを完了するまで待機してからHTTPサーバーのポート探索を開始するものとする。これにより、ttydとHTTPサーバーが同一ポートを取り合うレースコンディションを防止する
+
+5.14 The システムはttyd起動後の待機時間を1秒とするものとする
+
+5.15 If ttydのstderrにエラーが出力された場合, the システムはそのエラー内容をコンソールに出力するものとする
