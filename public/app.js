@@ -65,7 +65,7 @@ async function showFile(filename) {
   });
 
   const content = await fetchContent(filename);
-  await renderMarkdown(content);
+  await renderMarkdown(content, filename);
 }
 
 function fixTaskListNumbering(html) {
@@ -75,7 +75,17 @@ function fixTaskListNumbering(html) {
   );
 }
 
-async function renderMarkdown(markdown) {
+function rewriteAssetUrls(container, filename) {
+  container.querySelectorAll('img').forEach(img => {
+    const src = img.getAttribute('src');
+    if (!src) return;
+    if (/^(https?:\/\/|\/\/|data:|\/)/. test(src)) return;
+    const cleanSrc = src.startsWith('./') ? src.slice(2) : src;
+    img.setAttribute('src', `/assets/${encodeURIComponent(filename)}/${cleanSrc}`);
+  });
+}
+
+async function renderMarkdown(markdown, filename) {
   const preview = document.getElementById('preview');
 
   let html = marked.parse(markdown);
@@ -88,6 +98,10 @@ async function renderMarkdown(markdown) {
   html = fixTaskListNumbering(html);
 
   preview.innerHTML = html;
+
+  if (filename) {
+    rewriteAssetUrls(preview, filename);
+  }
 
   await mermaid.run({ querySelector: '.mermaid' });
 }

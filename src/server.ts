@@ -28,6 +28,12 @@ function getContentType(filePath: string): string {
   if (filePath.endsWith(".js")) return "application/javascript; charset=utf-8";
   if (filePath.endsWith(".json")) return "application/json; charset=utf-8";
   if (filePath.endsWith(".md")) return "text/plain; charset=utf-8";
+  if (filePath.endsWith(".png")) return "image/png";
+  if (filePath.endsWith(".jpg") || filePath.endsWith(".jpeg")) return "image/jpeg";
+  if (filePath.endsWith(".gif")) return "image/gif";
+  if (filePath.endsWith(".svg")) return "image/svg+xml";
+  if (filePath.endsWith(".webp")) return "image/webp";
+  if (filePath.endsWith(".ico")) return "image/x-icon";
   return "application/octet-stream";
 }
 
@@ -83,6 +89,12 @@ async function startServerWithFallback(
   maxRetries = 100
 ): Promise<ExtendedServer> {
   return new Promise((resolve, reject) => {
+    const fileBaseDirs = new Map<string, string>();
+    for (const f of files) {
+      const abs = path.resolve(f);
+      fileBaseDirs.set(path.basename(abs), path.dirname(abs));
+    }
+
     const server = http.createServer(async (req: http.IncomingMessage, res: http.ServerResponse) => {
       const url = new URL(req.url || "", `http://${req.headers.host}`);
       const pathname = url.pathname;
@@ -168,6 +180,43 @@ async function startServerWithFallback(
           res.statusCode = 200;
           res.setHeader("Content-Type", "text/html; charset=utf-8");
           res.end(content);
+          return;
+        }
+
+        if (pathname.startsWith("/assets/")) {
+          const rest = pathname.slice("/assets/".length);
+          const slashIdx = rest.indexOf("/");
+          if (slashIdx === -1) {
+            res.statusCode = 400;
+            res.end("Bad Request");
+            return;
+          }
+          const filename = decodeURIComponent(rest.slice(0, slashIdx));
+          const assetPath = decodeURIComponent(rest.slice(slashIdx + 1));
+
+          const baseDir = fileBaseDirs.get(filename);
+          if (!baseDir) {
+            res.statusCode = 404;
+            res.end("Not Found");
+            return;
+          }
+
+          const absolutePath = path.resolve(baseDir, assetPath);
+          if (!absolutePath.startsWith(baseDir + path.sep) && absolutePath !== baseDir) {
+            res.statusCode = 403;
+            res.end("Forbidden");
+            return;
+          }
+
+          try {
+            const content = await fs.readFile(absolutePath);
+            res.statusCode = 200;
+            res.setHeader("Content-Type", getContentType(absolutePath));
+            res.end(content);
+          } catch {
+            res.statusCode = 404;
+            res.end("Not Found");
+          }
           return;
         }
 
