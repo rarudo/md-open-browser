@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert";
 import { startServer, type ServerOptions, type ExtendedServer } from "./server";
-import { writeFileSync, unlinkSync } from "fs";
+import { writeFileSync, unlinkSync, mkdirSync, rmSync } from "fs";
+import http from "http";
+import path from "path";
 
 let server: ExtendedServer;
 const testFile = "test-server.md";
@@ -116,6 +118,59 @@ test("tmux API", async (t) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text: "hello" }),
     });
+    assert.strictEqual(res.status, 404);
+  });
+});
+
+test("アセット配信", async (t) => {
+  const testDir = "test-assets-dir";
+  const testMd = path.join(testDir, "test-assets.md");
+  const testImg = path.join(testDir, "image.png");
+  let assetServer: ExtendedServer;
+
+  t.before(async () => {
+    mkdirSync(testDir, { recursive: true });
+    writeFileSync(testMd, "# Test\n![image](./image.png)");
+    writeFileSync(testImg, "PNG_DUMMY_DATA");
+    assetServer = await startServer([testMd], { port: 3500 });
+  });
+
+  t.after(() => {
+    assetServer.close();
+    rmSync(testDir, { recursive: true });
+  });
+
+  await t.test("画像ファイルを取得できる", async () => {
+    const res = await fetch(`${assetServer.url}assets/test-assets.md/image.png`);
+    assert.strictEqual(res.status, 200);
+    assert.ok(res.headers.get("content-type")?.includes("image/png"));
+  });
+
+  await t.test("パストラバーサルは403を返す", async () => {
+    const url = new URL(assetServer.url);
+    const status = await new Promise<number>((resolve, reject) => {
+      const req = http.get({
+        hostname: url.hostname,
+        port: url.port,
+        path: "/assets/test-assets.md/..%2f..%2fetc/passwd",
+      }, (res) => {
+        res.resume();
+        resolve(res.statusCode!);
+      });
+      req.on("error", reject);
+    });
+    assert.strictEqual(status, 403);
+  });
+
+  await t.test("不明なファイル名は404を返す", async () => {
+    const res = await fetch(`${assetServer.url}assets/unknown.md/image.png`);
+    assert.strictEqual(res.status, 404);
+  });
+
+  await t.test("存在しないファイルは404を返す", async () => {
+    const res = await fetch(
+      `${assetServer.url}assets/test-assets.md/nonexistent.png`
+    );
     assert.strictEqual(res.status, 404);
   });
 });
