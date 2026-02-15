@@ -11,6 +11,7 @@ const __dirname = __filename ? path.dirname(__filename) : process.cwd() + "/src"
 export interface ServerOptions {
   port: number;
   tmuxPane?: string;
+  ttydAvailable?: boolean;
   ttydPort?: number;
   ttydProcess?: ChildProcess;
   tmuxGroupSession?: string;
@@ -228,32 +229,8 @@ export async function startServer(
   files: string[],
   options: ServerOptions
 ): Promise<ExtendedServer> {
-  if (options.tmuxPane && isTtydAvailable()) {
-    try {
-      const sessionName = getTmuxSessionName(options.tmuxPane);
-      const ttydBasePort = options.port + 1;
-
-      // Create group session and zoom the target pane
-      let ttydSessionName = sessionName;
-      try {
-        const wasZoomed = isTmuxPaneZoomed(options.tmuxPane);
-        const groupSession = createTmuxGroupSession(sessionName, options.tmuxPane);
-        options.tmuxGroupSession = groupSession;
-        options.tmuxWasZoomed = wasZoomed;
-        ttydSessionName = groupSession;
-      } catch (e) {
-        console.warn("Warning: Failed to create group session. Falling back to direct session attach.", e);
-      }
-
-      const result = await startTtyd(ttydSessionName, ttydBasePort);
-      if (result) {
-        options.ttydPort = result.port;
-        options.ttydProcess = result.process;
-      }
-    } catch (e) {
-      console.error("Failed to start ttyd:", e);
-    }
-  } else if (options.tmuxPane) {
+  options.ttydAvailable = options.tmuxPane ? isTtydAvailable() : false;
+  if (options.tmuxPane && !options.ttydAvailable) {
     console.warn("Warning: ttyd not found. Falling back to text-based catchup UI.");
   }
   return startServerWithFallback(files, options.port, options);
@@ -313,6 +290,7 @@ async function startServerWithFallback(
             enabled: !!options.tmuxPane,
             paneId: options.tmuxPane || null,
             ttydUrl: options.ttydPort ? `http://localhost:${options.ttydPort}` : null,
+            ttydAvailable: !!options.ttydAvailable,
           }));
           return;
         }
@@ -351,6 +329,58 @@ async function startServerWithFallback(
           } catch {
             res.statusCode = 500;
             res.end("Failed to send to tmux pane");
+          }
+          return;
+        }
+
+        if (pathname === "/api/tmux/init-ttyd" && req.method === "POST") {
+          if (!options.tmuxPane) {
+            res.statusCode = 404;
+            res.end("tmux integration not enabled");
+            return;
+          }
+          if (!options.ttydAvailable) {
+            res.statusCode = 404;
+            res.setHeader("Content-Type", "application/json; charset=utf-8");
+            res.end(JSON.stringify({ error: "ttyd command not found" }));
+            return;
+          }
+          if (options.ttydPort) {
+            res.statusCode = 200;
+            res.setHeader("Content-Type", "application/json; charset=utf-8");
+            res.end(JSON.stringify({ ttydUrl: `http://localhost:${options.ttydPort}` }));
+            return;
+          }
+          try {
+            const sessionName = getTmuxSessionName(options.tmuxPane);
+            const ttydBasePort = options.port + 1;
+
+            let ttydSessionName = sessionName;
+            try {
+              const wasZoomed = isTmuxPaneZoomed(options.tmuxPane);
+              const groupSession = createTmuxGroupSession(sessionName, options.tmuxPane);
+              options.tmuxGroupSession = groupSession;
+              options.tmuxWasZoomed = wasZoomed;
+              ttydSessionName = groupSession;
+            } catch (e) {
+              console.warn("Warning: Failed to create group session. Falling back to direct session attach.", e);
+            }
+
+            const result = await startTtyd(ttydSessionName, ttydBasePort);
+            if (result) {
+              options.ttydPort = result.port;
+              options.ttydProcess = result.process;
+              res.statusCode = 200;
+              res.setHeader("Content-Type", "application/json; charset=utf-8");
+              res.end(JSON.stringify({ ttydUrl: `http://localhost:${result.port}` }));
+            } else {
+              res.statusCode = 500;
+              res.end(JSON.stringify({ error: "Failed to start ttyd" }));
+            }
+          } catch (e) {
+            console.error("Failed to initialize ttyd:", e);
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: "Failed to initialize ttyd" }));
           }
           return;
         }

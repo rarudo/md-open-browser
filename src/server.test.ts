@@ -120,6 +120,19 @@ test("tmux API", async (t) => {
     });
     assert.strictEqual(res.status, 404);
   });
+
+  await t.test("POST /api/tmux/init-ttyd - tmux無効時は404", async () => {
+    const res = await fetch(`${serverWithoutTmux.url}api/tmux/init-ttyd`, {
+      method: "POST",
+    });
+    assert.strictEqual(res.status, 404);
+  });
+
+  await t.test("GET /api/tmux/status - ttydAvailableフィールドの確認", async () => {
+    const res = await fetch(`${serverWithoutTmux.url}api/tmux/status`);
+    const data = await res.json();
+    assert.strictEqual(typeof data.ttydAvailable, "boolean");
+  });
 });
 
 test("アセット配信", async (t) => {

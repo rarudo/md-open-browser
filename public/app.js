@@ -108,6 +108,8 @@ async function renderMarkdown(markdown, filename) {
 
 let tmuxPollingInterval = null;
 let tmuxEnabled = false;
+let ttydInitialized = false;
+let ttydInitializing = false;
 
 async function initTmuxCatchup() {
   try {
@@ -120,25 +122,17 @@ async function initTmuxCatchup() {
     document.querySelector('.resize-handle').style.display = 'block';
     setupResizeHandle();
 
-    if (status.ttydUrl) {
+    if (status.ttydAvailable) {
       const panelBody = document.querySelector('.tmux-panel-body');
-      const output = document.getElementById('tmux-output');
-      const inputArea = document.querySelector('.tmux-input-area');
-      if (output) output.style.display = 'none';
-      if (inputArea) inputArea.style.display = 'none';
-
-      const iframe = document.createElement('iframe');
-      iframe.src = status.ttydUrl;
-      iframe.className = 'ttyd-frame';
-      panelBody.insertBefore(iframe, panelBody.firstChild);
-
-      document.getElementById('tmux-panel').style.height = '40vh';
-
-      setupTtydToggle();
+      const toggleBtn = document.getElementById('tmux-panel-toggle');
+      panelBody.classList.add('collapsed');
+      toggleBtn.innerHTML = '&#9654;';
+      setupPanelToggle(true);
       return;
     }
 
     setupTmuxEventListeners();
+    setupPanelToggle(false);
     startTmuxPolling();
   } catch (e) {
     console.error('Failed to initialize tmux catchup:', e);
@@ -154,20 +148,6 @@ function autoResizeTextarea(textarea) {
 }
 
 function setupTmuxEventListeners() {
-  const header = document.querySelector('.tmux-panel-header');
-  const body = document.querySelector('.tmux-panel-body');
-  const toggleBtn = document.getElementById('tmux-panel-toggle');
-
-  header.addEventListener('click', () => {
-    const isCollapsed = body.classList.toggle('collapsed');
-    toggleBtn.innerHTML = isCollapsed ? '&#9650;' : '&#9660;';
-    if (isCollapsed) {
-      stopTmuxPolling();
-    } else {
-      startTmuxPolling();
-    }
-  });
-
   document.getElementById('tmux-send').addEventListener('click', () => sendTmuxMessage());
 
   document.getElementById('tmux-input').addEventListener('keydown', (e) => {
@@ -238,15 +218,69 @@ function stopTmuxPolling() {
   }
 }
 
-function setupTtydToggle() {
+function setupPanelToggle(ttydAvailable) {
   const header = document.querySelector('.tmux-panel-header');
   const body = document.querySelector('.tmux-panel-body');
   const toggleBtn = document.getElementById('tmux-panel-toggle');
 
   header.addEventListener('click', () => {
     const isCollapsed = body.classList.toggle('collapsed');
-    toggleBtn.innerHTML = isCollapsed ? '&#9650;' : '&#9660;';
+    toggleBtn.innerHTML = isCollapsed ? '&#9654;' : '&#9660;';
+
+    if (!isCollapsed) {
+      if (ttydAvailable && !ttydInitialized) {
+        initTtydOnFirstExpand();
+      } else if (!ttydAvailable) {
+        startTmuxPolling();
+      }
+    } else {
+      if (!ttydAvailable) {
+        stopTmuxPolling();
+      }
+    }
   });
+}
+
+async function initTtydOnFirstExpand() {
+  if (ttydInitializing) return;
+  ttydInitializing = true;
+
+  const panelBody = document.querySelector('.tmux-panel-body');
+
+  const loading = document.createElement('div');
+  loading.className = 'ttyd-loading';
+  loading.textContent = 'Starting terminal...';
+  panelBody.insertBefore(loading, panelBody.firstChild);
+
+  try {
+    const res = await fetch('/api/tmux/init-ttyd', { method: 'POST' });
+    if (!res.ok) throw new Error('init-ttyd failed');
+    const data = await res.json();
+
+    loading.remove();
+
+    const output = document.getElementById('tmux-output');
+    const inputArea = document.querySelector('.tmux-input-area');
+    if (output) output.style.display = 'none';
+    if (inputArea) inputArea.style.display = 'none';
+
+    const iframe = document.createElement('iframe');
+    iframe.src = data.ttydUrl;
+    iframe.className = 'ttyd-frame';
+    panelBody.insertBefore(iframe, panelBody.firstChild);
+
+    document.getElementById('tmux-panel').style.width = '40vw';
+
+    ttydInitialized = true;
+  } catch (e) {
+    console.error('Failed to initialize ttyd:', e);
+    loading.remove();
+
+    setupTmuxEventListeners();
+    startTmuxPolling();
+  } finally {
+    ttydInitializing = false;
+  }
 }
 
 function triggerIframeResize(panel) {
@@ -262,16 +296,16 @@ function setupResizeHandle() {
   const handle = document.querySelector('.resize-handle');
   const panel = document.getElementById('tmux-panel');
   let isDragging = false;
-  let startY = 0;
-  let startHeight = 0;
+  let startX = 0;
+  let startWidth = 0;
   let resizeTimer = null;
 
   handle.addEventListener('mousedown', (e) => {
     isDragging = true;
-    startY = e.clientY;
-    startHeight = panel.getBoundingClientRect().height;
+    startX = e.clientX;
+    startWidth = panel.getBoundingClientRect().width;
     handle.classList.add('active');
-    document.body.style.cursor = 'row-resize';
+    document.body.style.cursor = 'col-resize';
 
     const iframe = panel.querySelector('iframe');
     if (iframe) {
@@ -284,10 +318,10 @@ function setupResizeHandle() {
   document.addEventListener('mousemove', (e) => {
     if (!isDragging) return;
 
-    const delta = startY - e.clientY;
-    const maxHeight = window.innerHeight * 0.8;
-    const newHeight = Math.min(Math.max(startHeight + delta, 150), maxHeight);
-    panel.style.height = newHeight + 'px';
+    const delta = startX - e.clientX;
+    const maxWidth = window.innerWidth * 0.6;
+    const newWidth = Math.min(Math.max(startWidth + delta, 200), maxWidth);
+    panel.style.width = newWidth + 'px';
 
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(function() {
