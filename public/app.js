@@ -132,6 +132,8 @@ async function initTmuxCatchup() {
       iframe.className = 'ttyd-frame';
       panelBody.insertBefore(iframe, panelBody.firstChild);
 
+      document.getElementById('tmux-panel').style.height = '40vh';
+
       setupTtydToggle();
       return;
     }
@@ -247,12 +249,22 @@ function setupTtydToggle() {
   });
 }
 
+function triggerIframeResize(panel) {
+  var iframe = panel.querySelector('iframe');
+  if (!iframe) return;
+  iframe.style.width = 'calc(100% - 1px)';
+  requestAnimationFrame(function() {
+    iframe.style.width = '100%';
+  });
+}
+
 function setupResizeHandle() {
   const handle = document.querySelector('.resize-handle');
   const panel = document.getElementById('tmux-panel');
   let isDragging = false;
   let startY = 0;
   let startHeight = 0;
+  let resizeTimer = null;
 
   handle.addEventListener('mousedown', (e) => {
     isDragging = true;
@@ -276,6 +288,11 @@ function setupResizeHandle() {
     const maxHeight = window.innerHeight * 0.8;
     const newHeight = Math.min(Math.max(startHeight + delta, 150), maxHeight);
     panel.style.height = newHeight + 'px';
+
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function() {
+      triggerIframeResize(panel);
+    }, 150);
   });
 
   document.addEventListener('mouseup', () => {
@@ -289,5 +306,8 @@ function setupResizeHandle() {
     if (iframe) {
       iframe.style.pointerEvents = '';
     }
+
+    clearTimeout(resizeTimer);
+    triggerIframeResize(panel);
   });
 }

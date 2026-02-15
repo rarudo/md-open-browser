@@ -189,7 +189,7 @@ function isPortAvailable(port: number): Promise<boolean> {
 async function startTtyd(
   sessionName: string,
   basePort: number,
-  maxRetries: number = 10
+  maxRetries: number = 30
 ): Promise<{ process: ChildProcess; port: number } | null> {
   let port = basePort;
   for (let i = 0; i < maxRetries; i++) {

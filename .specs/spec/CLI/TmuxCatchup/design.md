@@ -626,3 +626,43 @@ function parseTmuxRequestBody(req: http.IncomingMessage): Promise<string> {
 - **セッションレベル設定（採用）**: 影響範囲が限定的で安全
 - **グローバル設定（却下）**: 他のtmuxセッションに予期しない影響
 - **ttydのクライアントオプションで固定サイズ（却下）**: ttyd内蔵のFitAddonが有効なため完全固定は困難
+
+---
+
+## 追加設計決定（v4）
+
+### 決定14: ドラッグリサイズ時のiframe内ターミナルリサイズ追従
+
+**What**: ドラッグハンドルによるパネルリサイズ時に、ttyd iframe内のxterm.js FitAddonが確実にターミナルサイズを再計算するよう、明示的なリサイズトリガーを実装する
+
+**How**:
+- ファイル: `public/app.js`, `public/styles.css`
+- 実装方針:
+  1. `.ttyd-frame`の`min-height: 300px`を`min-height: 0`に変更（flex shrinkを許可）
+  2. ttydモード初期化時にパネルの明示的な初期高さ（`40vh`）を設定
+  3. ドラッグ完了時（mouseup）に、iframeの幅を1px縮小→1フレーム後に復元する「width toggle」で強制的にviewportリサイズイベントを発火
+  4. ドラッグ中（mousemove）も150msデバウンスでリサイズ通知を送信
+
+**Why（Core）**:
+
+なぜiframe内のターミナルがリサイズに追従しないのか？
+→ dev-browserによる実機検証で確認済み: ドラッグでパネル339px→539pxに拡大し、iframe 300px→500pxに変化しても、xterm.jsのターミナル表示領域は元のサイズのまま変化しなかった。width toggle適用後に即座にリサイズが反映された。原因は2つ: (1) `.ttyd-frame`の`min-height: 300px`がflex shrinkを阻害し、パネルを小さくしてもiframeのviewportサイズが変化しない。(2) cross-origin iframe（ttydは別ポートで動作）では、ブラウザ（Chromium含む）がCSS flex reflow経由のiframe高さ変更時に`window.resize`イベントを発火しない
+
+なぜwidth toggleアプローチ？
+→ cross-origin iframeでは`contentWindow.dispatchEvent()`がセキュリティポリシーで使用不可。iframeのwidthを1px変更→復元することで、ブラウザにviewport変更を明示的に通知し、iframe内のresize eventを確実に発火させる。この方法はorigen policyに抵触しない
+
+なぜmin-height: 0に変更？
+→ `min-height: 300px`があると、パネル高さが300px+ヘッダー高さ以下に縮小された場合、iframeのviewportサイズは300pxのまま変化しない（`.tmux-panel-body`の`overflow: hidden`で視覚的にクリップされるのみ）。`min-height: 0`にすることで、iframeはパネルの高さに応じて自由に伸縮し、viewportサイズが実際に変化する
+
+なぜパネルに初期高さ40vhを設定？
+→ `min-height`の撤廃により、iframe（flex: 1）は0pxまで縮小可能になる。パネルに明示的な初期高さを設定しないと、flex layoutによりiframeが極端に小さくなる可能性がある。40vhはビューポート高さの40%で、マークダウンプレビューとターミナルのバランスが取れる
+
+**検討した選択肢**:
+- **width toggleトリック（採用）**: cross-origin制約に抵触しない。実装がシンプル（5行程度）で確実にviewportリサイズを通知
+- **postMessage通信（却下）**: ttydはpostMessageリスナーを実装していないため、受信側の対応が不可能
+- **同一originプロキシ（却下）**: server.tsにリバースプロキシを追加する必要があり、WebSocket対応も含め実装コストが高い
+- **ResizeObserver単独（却下）**: iframeの外側の要素に対するResizeObserverは発火するが、それだけではiframe内部にリサイズが伝播しない。width toggleとの組み合わせが必要
+
+**トレードオフ**:
+- 利点: ドラッグ中もドラッグ後もターミナルがリサイズに追従する。cross-originでも動作する
+- 妥協: width toggleによる1px幅変更が1フレーム（約16ms）発生するが、視覚的には知覚不可能
