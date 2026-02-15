@@ -15,7 +15,7 @@ test("Server", async (t) => {
   });
 
   t.after(() => {
-    server.close();
+    server.stop();
     unlinkSync(testFile);
   });
 
@@ -57,14 +57,14 @@ test("ポートフォールバック", async (t) => {
     const testFile2 = "test-fallback.md";
     writeFileSync(testFile2, "# Fallback Test");
 
-    const server1 = await startServer([testFile2], { port: 3200 });
-    const server2 = await startServer([testFile2], { port: 3200 });
+    const server1 = await startServer([testFile2], { port: 4200 });
+    const server2 = await startServer([testFile2], { port: 4200 });
 
-    assert.ok(server1.url.includes("3200"));
-    assert.ok(!server2.url.includes("3200"));
+    assert.ok(server1.url.includes("4200"));
+    assert.ok(!server2.url.includes("4200"));
 
-    server1.close();
-    server2.close();
+    server1.stop();
+    server2.stop();
     unlinkSync(testFile2);
   });
 });
@@ -86,8 +86,8 @@ test("tmux API", async (t) => {
   });
 
   t.after(() => {
-    serverWithTmux.close();
-    serverWithoutTmux.close();
+    serverWithTmux.stop();
+    serverWithoutTmux.stop();
     unlinkSync(testFileTmux);
   });
 
@@ -136,7 +136,7 @@ test("アセット配信", async (t) => {
   });
 
   t.after(() => {
-    assetServer.close();
+    assetServer.stop();
     rmSync(testDir, { recursive: true });
   });
 

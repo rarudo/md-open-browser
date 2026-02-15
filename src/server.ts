@@ -13,6 +13,8 @@ export interface ServerOptions {
   tmuxPane?: string;
   ttydPort?: number;
   ttydProcess?: ChildProcess;
+  tmuxGroupSession?: string;
+  tmuxWasZoomed?: boolean;
 }
 
 interface FileInfo {
@@ -94,6 +96,85 @@ function getTmuxSessionName(paneId: string): string {
   ).trim();
 }
 
+function getTmuxWindowIndex(paneId: string): string {
+  return execSync(
+    `tmux display-message -p -t ${JSON.stringify(paneId)} "#{window_index}"`,
+    { encoding: "utf-8", timeout: 5000 }
+  ).trim();
+}
+
+function isTmuxPaneZoomed(paneId: string): boolean {
+  const flag = execSync(
+    `tmux display-message -p -t ${JSON.stringify(paneId)} "#{window_zoomed_flag}"`,
+    { encoding: "utf-8", timeout: 5000 }
+  ).trim();
+  return flag === "1";
+}
+
+function createTmuxGroupSession(originalSession: string, paneId: string): string {
+  const groupSession = `md-open-ttyd-${process.pid}`;
+  const windowIndex = getTmuxWindowIndex(paneId);
+
+  // Create group session linked to original session
+  execSync(
+    `tmux new-session -d -t ${JSON.stringify(originalSession)} -s ${JSON.stringify(groupSession)}`,
+    { timeout: 5000 }
+  );
+
+  // Select the target window in the group session
+  execSync(
+    `tmux select-window -t ${JSON.stringify(groupSession + ":" + windowIndex)}`,
+    { timeout: 5000 }
+  );
+
+  // Set window-size to latest so the last active client determines the size
+  execSync(
+    `tmux set-option -t ${JSON.stringify(groupSession)} window-size latest`,
+    { timeout: 5000 }
+  );
+
+  // Zoom the target pane if not already zoomed
+  const wasZoomed = isTmuxPaneZoomed(paneId);
+  if (!wasZoomed) {
+    execSync(
+      `tmux resize-pane -Z -t ${JSON.stringify(paneId)}`,
+      { timeout: 5000 }
+    );
+  }
+
+  return groupSession;
+}
+
+function cleanupTmuxGroupSession(options: ServerOptions): void {
+  try {
+    // Unzoom only if we zoomed it
+    if (options.tmuxPane && options.tmuxWasZoomed === false) {
+      try {
+        execSync(
+          `tmux resize-pane -Z -t ${JSON.stringify(options.tmuxPane)}`,
+          { timeout: 5000 }
+        );
+      } catch {
+        // Ignore errors during cleanup
+      }
+    }
+  } catch {
+    // Ignore errors during cleanup
+  }
+
+  try {
+    // Kill the group session
+    if (options.tmuxGroupSession) {
+      execSync(
+        `tmux kill-session -t ${JSON.stringify(options.tmuxGroupSession)}`,
+        { timeout: 5000 }
+      );
+    }
+  } catch {
+    // Ignore errors during cleanup
+  }
+}
+
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const server = net.createServer();
@@ -151,7 +232,20 @@ export async function startServer(
     try {
       const sessionName = getTmuxSessionName(options.tmuxPane);
       const ttydBasePort = options.port + 1;
-      const result = await startTtyd(sessionName, ttydBasePort);
+
+      // Create group session and zoom the target pane
+      let ttydSessionName = sessionName;
+      try {
+        const wasZoomed = isTmuxPaneZoomed(options.tmuxPane);
+        const groupSession = createTmuxGroupSession(sessionName, options.tmuxPane);
+        options.tmuxGroupSession = groupSession;
+        options.tmuxWasZoomed = wasZoomed;
+        ttydSessionName = groupSession;
+      } catch (e) {
+        console.warn("Warning: Failed to create group session. Falling back to direct session attach.", e);
+      }
+
+      const result = await startTtyd(ttydSessionName, ttydBasePort);
       if (result) {
         options.ttydPort = result.port;
         options.ttydProcess = result.process;
@@ -347,8 +441,13 @@ async function startServerWithFallback(
       extendedServer.url = `http://localhost:${port}/`;
       extendedServer.stop = () => {
         if (options.ttydProcess) {
+          options.ttydProcess.stdout?.destroy();
+          options.ttydProcess.stderr?.destroy();
           options.ttydProcess.kill();
+          options.ttydProcess.unref();
         }
+        cleanupTmuxGroupSession(options);
+        server.closeAllConnections();
         server.close();
       };
       resolve(extendedServer);

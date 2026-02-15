@@ -167,3 +167,61 @@ description: tmuxキャッチアップUIの要件定義
 5.14 The システムはttyd起動後の待機時間を1秒とするものとする
 
 5.15 If ttydのstderrにエラーが出力された場合, the システムはそのエラー内容をコンソールに出力するものとする
+
+## 6. ペイン表示分離（グループセッション）
+
+**目的**: ユーザーとして、tmuxペインが分割されている場合でもブラウザ上に自分のペインのみを表示したい。それにより、仕様書レビュー中にClaude Codeの出力に集中できる。
+
+### 受け入れ基準
+
+6.1 When ttydを起動する場合, the システムは`tmux new-session -d -t <original_session> -s md-open-ttyd-<pid>`でグループセッションを作成し、ttydはグループセッションにアタッチするものとする
+
+6.2 When グループセッションを作成した場合, the システムは`tmux select-window -t <group_session>:<window_index>`で対象ペインが含まれるウィンドウを選択するものとする
+
+6.3 When グループセッション作成後, the システムは対象ペインを`tmux resize-pane -Z -t <pane_id>`でズーム最大化し、ブラウザ上に対象ペインのみが表示されるようにするものとする
+
+6.4 The システムはズーム実行前に`tmux display-message -p -t <pane_id> "#{window_zoomed_flag}"`で現在のズーム状態を記録するものとする
+
+6.5 When md-open-browserプロセスが終了（SIGINT、SIGTERM、正常終了）した場合, the システムは以下のクリーンアップを実行するものとする:
+  - md-open側でズームを実行した場合のみ、`tmux resize-pane -Z -t <pane_id>`でズームを解除
+  - `tmux kill-session -t <group_session>` でグループセッションを破棄
+
+6.6 If グループセッション名が既に存在する場合, the システムはプロセスIDを含めたユニークな名前を生成するものとする（`md-open-ttyd-<pid>`形式）
+
+6.7 The グループセッション作成時にtmuxペインIDから以下の情報を取得するものとする:
+  - セッション名: `tmux display-message -p -t <pane_id> "#{session_name}"`
+  - ウィンドウインデックス: `tmux display-message -p -t <pane_id> "#{window_index}"`
+
+6.8 If グループセッションの作成に失敗した場合, the システムは警告メッセージを出力し、従来の直接セッションアタッチ方式にフォールバックするものとする
+
+## 7. パネルリサイズ（ドラッグハンドル）
+
+**目的**: ユーザーとして、キャッチアップパネルの高さをマウスドラッグで自由に変更したい。それにより、ターミナル表示とマークダウンプレビューの表示比率を作業内容に合わせて調整できる。
+
+### 受け入れ基準
+
+7.1 Where tmux連携が有効でキャッチアップパネルが表示される場合, the システムはマークダウンプレビュー領域（`<article>`）とキャッチアップパネル（`.tmux-panel`）の間にリサイズハンドル要素を表示するものとする
+
+7.2 When リサイズハンドル上でmousedownイベントが発生した場合, the システムはドラッグモードを開始し、mousemoveに応じてキャッチアップパネルの高さを変更するものとする
+
+7.3 When mouseupイベントが発生した場合, the システムはドラッグモードを終了するものとする
+
+7.4 The キャッチアップパネルの高さは最小150px、最大80vhの範囲に制限されるものとする
+
+7.5 While ドラッグモード中, the システムはttyd iframeに`pointer-events: none`を設定し、mousemoveイベントがiframeに奪われることを防止するものとする
+
+7.6 When ドラッグモードが終了した場合, the システムはttyd iframeの`pointer-events`を元に戻すものとする
+
+7.7 The リサイズハンドルは高さ6px、カーソル`row-resize`で表示し、ホバー時およびドラッグ中は視覚的なフィードバック（背景色`#1f6feb`）を提供するものとする
+
+7.8 Where tmux連携が無効な場合, the リサイズハンドルは表示されないものとする
+
+## 8. 表示崩れ対策（window-size設定）
+
+**目的**: ユーザーとして、ブラウザのttydからターミナルに戻った際にtmuxの表示が崩れないようにしたい。それにより、ブラウザとターミナルの切り替えをスムーズに行える。
+
+### 受け入れ基準
+
+8.1 When グループセッションを作成した場合, the システムはそのセッションに`tmux set-option -t <group_session> window-size latest`を設定し、最後に操作したクライアントのサイズに従うようにするものとする
+
+8.2 The `window-size`設定はグループセッションのみに適用し、ユーザーのグローバルtmux設定には影響しないものとする

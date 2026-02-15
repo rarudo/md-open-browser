@@ -117,6 +117,8 @@ async function initTmuxCatchup() {
     if (!tmuxEnabled) return;
 
     document.getElementById('tmux-panel').style.display = 'flex';
+    document.querySelector('.resize-handle').style.display = 'block';
+    setupResizeHandle();
 
     if (status.ttydUrl) {
       const panelBody = document.querySelector('.tmux-panel-body');
@@ -242,5 +244,50 @@ function setupTtydToggle() {
   header.addEventListener('click', () => {
     const isCollapsed = body.classList.toggle('collapsed');
     toggleBtn.innerHTML = isCollapsed ? '&#9650;' : '&#9660;';
+  });
+}
+
+function setupResizeHandle() {
+  const handle = document.querySelector('.resize-handle');
+  const panel = document.getElementById('tmux-panel');
+  let isDragging = false;
+  let startY = 0;
+  let startHeight = 0;
+
+  handle.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    startY = e.clientY;
+    startHeight = panel.getBoundingClientRect().height;
+    handle.classList.add('active');
+    document.body.style.cursor = 'row-resize';
+
+    const iframe = panel.querySelector('iframe');
+    if (iframe) {
+      iframe.style.pointerEvents = 'none';
+    }
+
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+
+    const delta = startY - e.clientY;
+    const maxHeight = window.innerHeight * 0.8;
+    const newHeight = Math.min(Math.max(startHeight + delta, 150), maxHeight);
+    panel.style.height = newHeight + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!isDragging) return;
+
+    isDragging = false;
+    handle.classList.remove('active');
+    document.body.style.cursor = '';
+
+    const iframe = panel.querySelector('iframe');
+    if (iframe) {
+      iframe.style.pointerEvents = '';
+    }
   });
 }

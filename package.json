@@ -10,7 +10,7 @@
   "scripts": {
     "build": "tsc",
     "prepack": "npm run build",
-    "test": "node --import tsx --test 'src/**/*.test.ts' 'tests/**/*.test.js'",
+    "test": "node --import tsx --test --test-force-exit 'src/**/*.test.ts' 'tests/**/*.test.js'",
     "dev": "npx tsx src/index.ts"
   },
   "engines": {

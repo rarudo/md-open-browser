@@ -127,6 +127,12 @@ async function main() {
     server.stop();
     process.exit(0);
   });
+
+  process.on("SIGTERM", () => {
+    console.log("\nShutting down...");
+    server.stop();
+    process.exit(0);
+  });
 }
 
 main().catch(console.error);

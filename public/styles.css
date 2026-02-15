@@ -121,11 +121,22 @@ body::-webkit-scrollbar-thumb {
   background-color: var(--color-canvas-subtle);
 }
 
+.resize-handle {
+  height: 6px;
+  cursor: row-resize;
+  background: #30363d;
+  flex-shrink: 0;
+}
+
+.resize-handle:hover,
+.resize-handle.active {
+  background: #1f6feb;
+}
+
 .tmux-panel {
   border-top: 1px solid #30363d;
   background: #161b22;
   flex-shrink: 0;
-  max-height: 50vh;
   display: flex;
   flex-direction: column;
 }
