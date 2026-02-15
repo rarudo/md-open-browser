@@ -28,12 +28,32 @@ npx md-open file1.md file2.md
 npm run dev -- file1.md file2.md
 ```
 
+### tmuxキャッチアップ（Claude Code連携）
+
+tmux環境でClaude Codeと併用する場合、ブラウザ上にターミナルを表示できます。
+
+```bash
+# 環境変数TMUX_PANEから自動検出
+npx md-open --use-claude-code file1.md
+
+# ペインIDを明示的に指定
+npx md-open --tmux-pane %0 file1.md
+```
+
+ttydがインストールされている場合、完全なWebターミナルエミュレーション（ANSIカラー、カーソル、リアルタイム入出力）が利用できます。未インストールの場合はプレーンテキスト表示にフォールバックします。
+
+```bash
+brew install ttyd
+```
+
 ### オプション
 
 - `--help`, `-h`: ヘルプを表示
 - `--version`, `-v`: バージョン情報を表示
 - `--port <number>`, `-p <number>`: サーバーのポート番号を指定（デフォルト: 3000）
 - `--no-open`: ブラウザを自動で開かない
+- `--use-claude-code`: 環境変数`TMUX_PANE`からペインIDを自動取得してキャッチアップ機能を有効化
+- `--tmux-pane <pane_id>`: tmuxペインIDを指定してキャッチアップ機能を有効化
 
 ## 開発
 
@@ -55,7 +75,12 @@ npm test
 - 左側にファイルリスト、右側にプレビュー表示
 - mermaidダイアグラム対応
 - シンタックスハイライト対応
+- Markdownから参照されるローカル画像のプレビュー表示
 - ポート競合時の自動解決
+- tmuxキャッチアップUI（Claude Code連携）
+  - ttydによるWebターミナルエミュレーション
+  - プレーンテキストフォールバック
+  - ドラッグリサイズ対応
 
 ## リリースプロセス
 
