@@ -196,9 +196,14 @@ async function startTtyd(
   for (let i = 0; i < maxRetries; i++) {
     const available = await isPortAvailable(port);
     if (available) {
+      const ttydTheme = JSON.stringify({
+        background: "#0d1117",
+        foreground: "#c9d1d9",
+      });
       const ttydProcess = spawn("ttyd", [
         "--port", String(port),
         "--writable",
+        "-t", `theme=${ttydTheme}`,
         "tmux", "attach-session", "-t", sessionName,
       ], {
         stdio: ["ignore", "pipe", "pipe"],

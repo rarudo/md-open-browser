@@ -141,6 +141,7 @@ sequenceDiagram
 | 2.2 | ペイン内容取得API | server.ts | GET /api/tmux/pane |
 | 2.3 | テキスト送信API | server.ts | POST /api/tmux/send |
 | 2.4-2.6 | 入力サニタイズ・エラー処理 | server.ts | sanitizeTmuxInput(), parseTmuxRequestBody() |
+| 5.16 | ttydテーマ設定 | server.ts | startTtyd() --theme option |
 | 3.1 | キャッチアップパネル配置 | index.html, styles.css | .tmux-panel |
 | 3.2, 3.15 | テキスト入力・送信UI（IME対応） | index.html, app.js | #tmux-input, #tmux-send, isComposing |
 | 3.3 | ペイン出力表示 | app.js | fetchTmuxPaneContent() |
@@ -506,6 +507,28 @@ function parseTmuxRequestBody(req: http.IncomingMessage): Promise<string> {
 - 利点: 完全なターミナルエミュレーション（カラー、カーソル、リサイズ、マウス）、リアルタイム表示、既存の自前ポーリング+送信コードが不要になり簡素化
 - 妥協: ttydの外部バイナリへの依存（ユーザーが事前にインストールする必要がある）、ポート2つ使用
 - PoC段階: まず動作検証を行い、本格採用の判断材料とする
+
+### 決定17: ttydテーマ設定によるUI統一
+
+**What**: ttyd起動時に `--theme` オプションを指定し、iframe内ターミナルの背景色・前景色をmd-open-browserのダークテーマと一致させる
+
+**How**:
+- ファイル: `src/server.ts`
+- 実装方針: `startTtyd` 内の `spawn("ttyd", [...])` に `-t theme=<JSON>` オプションを追加。JSONで `background: "#0d1117"`, `foreground: "#c9d1d9"` を指定
+
+**Why（Core）**:
+
+なぜテーマ指定が必要？
+→ ttydのデフォルトxterm.jsテーマはmd-open-browserのダークテーマ（`#0d1117`）と異なるため、iframe内ターミナルの背景色が周囲のUIと不統一になる。ユーザーからは白っぽく見える背景色として視覚的な違和感が生じる
+
+なぜ `-t theme=<JSON>` 形式？
+→ ttydの公式オプション。`-t` はxterm.jsの設定を渡すためのフラグで、`theme=<JSON>` でxterm.jsのThemeオブジェクトをJSON文字列として指定できる
+
+**トレードオフ**:
+- 利点: iframe内ターミナルとmd-open-browserのUIが色味で統一され、シームレスな外観になる
+- 妥協: ユーザーのターミナルカラースキーム（~/.tmux.confなど）を部分的に上書きする可能性がある
+
+---
 
 ### 決定10: ttyd起動後の固定待機によるポート競合の防止
 
