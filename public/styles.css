@@ -1,5 +1,33 @@
+[data-theme="dark"] {
+  --bg-primary: #0d1117;
+  --bg-secondary: #161b22;
+  --bg-tertiary: #21262d;
+  --text-primary: #e6edf3;
+  --text-secondary: #c9d1d9;
+  --text-muted: #8b949e;
+  --border-color: #30363d;
+  --accent-color: #1f6feb;
+  --scrollbar-track: #333;
+  --scrollbar-thumb: #555;
+  --html-bg: #333;
+}
+
+[data-theme="light"] {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f6f8fa;
+  --bg-tertiary: #eaeef2;
+  --text-primary: #1f2328;
+  --text-secondary: #656d76;
+  --text-muted: #656d76;
+  --border-color: #d0d7de;
+  --accent-color: #0969da;
+  --scrollbar-track: #f0f0f0;
+  --scrollbar-thumb: #c0c0c0;
+  --html-bg: #f0f0f0;
+}
+
 html {
-  background: #333;
+  background: var(--html-bg);
 }
 
 * {
@@ -25,10 +53,10 @@ body::-webkit-scrollbar {
   width: 4px;
 }
 body::-webkit-scrollbar-track {
-  background: #333;
+  background: var(--scrollbar-track);
 }
 body::-webkit-scrollbar-thumb {
-  background-color: #555;
+  background-color: var(--scrollbar-thumb);
 }
 
 .container {
@@ -40,8 +68,8 @@ body::-webkit-scrollbar-thumb {
 .sidebar {
   width: 250px;
   flex-shrink: 0;
-  background: #161b22;
-  border-right: 1px solid #30363d;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
   padding: 16px;
   overflow-y: auto;
 }
@@ -49,7 +77,7 @@ body::-webkit-scrollbar-thumb {
 .sidebar h2 {
   font-size: 14px;
   font-weight: 600;
-  color: #e6edf3;
+  color: var(--text-primary);
   margin-bottom: 12px;
 }
 
@@ -62,25 +90,31 @@ body::-webkit-scrollbar-thumb {
   cursor: pointer;
   border-radius: 6px;
   font-size: 14px;
-  color: #e6edf3;
+  color: var(--text-primary);
 }
 
 #file-list li:hover {
-  background: #21262d;
+  background: var(--bg-tertiary);
 }
 
 #file-list li.active {
-  background: #1f6feb;
+  background: var(--accent-color);
   color: #ffffff;
 }
 
 .content {
   flex: 1;
   padding: 0;
-  background: #0d1117;
+  background: var(--bg-primary);
   display: flex;
   flex-direction: row;
   overflow: hidden;
+}
+
+.preview-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .markdown-body {
@@ -89,10 +123,8 @@ body::-webkit-scrollbar-thumb {
   max-width: 980px;
   margin: 0;
   padding: 45px;
-  overflow-x: hidden;
-  background: #0d1117;
-  flex: 1;
-  overflow-y: auto;
+  background: var(--bg-primary);
+  border: none;
 }
 
 @media (max-width: 767px) {
@@ -124,18 +156,18 @@ body::-webkit-scrollbar-thumb {
 .resize-handle {
   width: 6px;
   cursor: col-resize;
-  background: #30363d;
+  background: var(--border-color);
   flex-shrink: 0;
 }
 
 .resize-handle:hover,
 .resize-handle.active {
-  background: #1f6feb;
+  background: var(--accent-color);
 }
 
 .tmux-panel {
-  border-left: 1px solid #30363d;
-  background: #161b22;
+  border-left: 1px solid var(--border-color);
+  background: var(--bg-secondary);
   flex-shrink: 0;
   height: 100%;
   display: flex;
@@ -147,7 +179,7 @@ body::-webkit-scrollbar-thumb {
   justify-content: space-between;
   align-items: center;
   padding: 8px 16px;
-  background: #21262d;
+  background: var(--bg-tertiary);
   cursor: pointer;
   user-select: none;
 }
@@ -155,20 +187,20 @@ body::-webkit-scrollbar-thumb {
 .tmux-panel-title {
   font-size: 13px;
   font-weight: 600;
-  color: #e6edf3;
+  color: var(--text-primary);
 }
 
 .tmux-panel-toggle {
   background: none;
   border: none;
-  color: #8b949e;
+  color: var(--text-muted);
   cursor: pointer;
   font-size: 12px;
   padding: 4px;
 }
 
 .tmux-panel-toggle:hover {
-  color: #e6edf3;
+  color: var(--text-primary);
 }
 
 .tmux-panel-body {
@@ -189,8 +221,8 @@ body::-webkit-scrollbar-thumb {
   margin: 0;
   font-size: 13px;
   line-height: 1.5;
-  color: #c9d1d9;
-  background: #0d1117;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
   white-space: pre-wrap;
   word-wrap: break-word;
 }
@@ -199,8 +231,8 @@ body::-webkit-scrollbar-thumb {
   display: flex;
   padding: 8px 16px;
   gap: 8px;
-  border-top: 1px solid #30363d;
-  background: #161b22;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-secondary);
 }
 
 .tmux-input {
@@ -208,9 +240,9 @@ body::-webkit-scrollbar-thumb {
   padding: 8px 12px;
   font-size: 13px;
   font-family: inherit;
-  color: #e6edf3;
-  background: #0d1117;
-  border: 1px solid #30363d;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   outline: none;
   resize: none;
@@ -219,7 +251,7 @@ body::-webkit-scrollbar-thumb {
 }
 
 .tmux-input:focus {
-  border-color: #1f6feb;
+  border-color: var(--accent-color);
 }
 
 .tmux-send-btn {
@@ -247,5 +279,25 @@ body::-webkit-scrollbar-thumb {
   width: 100%;
   min-height: 0;
   border: none;
-  background: #0d1117;
+  background: var(--bg-primary);
+}
+
+.theme-toggle {
+  float: right;
+  margin: 12px 16px 0 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.theme-toggle:hover {
+  background: var(--bg-tertiary);
 }

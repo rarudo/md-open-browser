@@ -4,18 +4,36 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>md-open</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.1/github-markdown-dark.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <link id="markdown-css" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.1/github-markdown-dark.min.css">
+  <link id="hljs-css" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
   <link rel="stylesheet" href="/styles.css">
+  <script>
+    (function() {
+      var theme = document.cookie.replace(/(?:(?:^|.*;\s*)md-open-theme\s*=\s*([^;]*).*$)|^.*$/, '$1');
+      if (!theme) {
+        theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      document.documentElement.setAttribute('data-theme', theme);
+      if (theme === 'light') {
+        var mc = document.getElementById('markdown-css');
+        if (mc) mc.href = mc.href.replace('github-markdown-dark', 'github-markdown-light');
+        var hc = document.getElementById('hljs-css');
+        if (hc) hc.href = hc.href.replace('github-dark', 'github');
+      }
+    })();
+  </script>
 </head>
-<body data-theme="dark">
+<body>
   <div class="container">
     <aside class="sidebar">
       <h2>Files</h2>
       <ul id="file-list"></ul>
     </aside>
     <main class="content">
-      <article id="preview" class="markdown-body"></article>
+      <div class="preview-container">
+        <button id="theme-toggle" class="theme-toggle" title="Toggle theme"></button>
+        <article id="preview" class="markdown-body"></article>
+      </div>
       <div class="resize-handle" style="display: none;"></div>
       <div id="tmux-panel" class="tmux-panel" style="display: none;">
         <div class="tmux-panel-header">

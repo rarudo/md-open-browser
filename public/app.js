@@ -1,7 +1,65 @@
 document.addEventListener('DOMContentLoaded', init);
 
+function getPreferredTheme() {
+  var match = document.cookie.match(/(?:^|;\s*)md-open-theme=([^;]*)/);
+  if (match) return match[1];
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function getCurrentTheme() {
+  return document.documentElement.getAttribute('data-theme') || 'dark';
+}
+
+function setTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  document.body.setAttribute('data-theme', theme);
+
+  var markdownCss = document.getElementById('markdown-css');
+  var hljsCss = document.getElementById('hljs-css');
+  if (theme === 'dark') {
+    markdownCss.href = 'https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.1/github-markdown-dark.min.css';
+    hljsCss.href = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css';
+  } else {
+    markdownCss.href = 'https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.1/github-markdown-light.min.css';
+    hljsCss.href = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css';
+  }
+
+  mermaid.initialize({ startOnLoad: false, theme: theme === 'dark' ? 'dark' : 'default' });
+
+  var toggleBtn = document.getElementById('theme-toggle');
+  if (toggleBtn) {
+    toggleBtn.textContent = theme === 'dark' ? '\u2600' : '\u263D';
+  }
+
+  document.cookie = 'md-open-theme=' + theme + '; path=/; max-age=31536000; SameSite=Lax';
+
+  var iframe = document.querySelector('.ttyd-frame');
+  if (iframe) {
+    var ttydTheme = JSON.stringify(getTtydTheme(theme));
+    var baseUrl = iframe.src.split('?')[0];
+    iframe.src = baseUrl + '?theme=' + encodeURIComponent(ttydTheme);
+  }
+}
+
+function getTtydTheme(theme) {
+  if (theme === 'dark') {
+    return { background: '#0d1117', foreground: '#c9d1d9' };
+  }
+  return { background: '#ffffff', foreground: '#1f2328' };
+}
+
 async function init() {
-  mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+  setTheme(getPreferredTheme());
+
+  document.getElementById('theme-toggle').addEventListener('click', function() {
+    setTheme(getCurrentTheme() === 'dark' ? 'light' : 'dark');
+  });
+
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+    if (!document.cookie.match(/md-open-theme=/)) {
+      setTheme(e.matches ? 'dark' : 'light');
+    }
+  });
 
   marked.use({
     renderer: {
@@ -9,7 +67,6 @@ async function init() {
         const lang = token.lang || '';
         const code = token.text;
 
-        // mermaidコードブロックはhighlight.jsを適用せず、そのまま返す
         if (lang === 'mermaid') {
           return `<pre><code class="language-mermaid">${code}</code></pre>`;
         }
@@ -265,7 +322,8 @@ async function initTtydOnFirstExpand() {
     if (inputArea) inputArea.style.display = 'none';
 
     const iframe = document.createElement('iframe');
-    iframe.src = data.ttydUrl;
+    const ttydTheme = JSON.stringify(getTtydTheme(getCurrentTheme()));
+    iframe.src = data.ttydUrl + '/?theme=' + encodeURIComponent(ttydTheme);
     iframe.className = 'ttyd-frame';
     panelBody.insertBefore(iframe, panelBody.firstChild);
 
